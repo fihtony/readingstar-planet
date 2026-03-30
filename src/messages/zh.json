@@ -1,0 +1,126 @@
+{
+  "app": {
+    "name": "阅读星球",
+    "tagline": "你的阅读冒险从这里开始！"
+  },
+  "map": {
+    "harbor": "书架港",
+    "harborDesc": "上传书籍，开始阅读冒险！",
+    "island": "聚光岛",
+    "islandDesc": "一句一句专注阅读！",
+    "bay": "字母湾",
+    "bayDesc": "给字母涂上颜色，轻松分辨！",
+    "valley": "回声谷",
+    "valleyDesc": "听故事，大声朗读！",
+    "blocks": "声音积木岛",
+    "blocksDesc": "玩声音，拼单词！",
+    "beach": "沙盘滩",
+    "beachDesc": "在沙滩上画字母！",
+    "factory": "造词工厂",
+    "factoryDesc": "用声音和字母组装单词！",
+    "comingSoon": "即将开放",
+    "intro": "把鼠标移到港湾、岛屿、海湾、山谷和沙滩上，对应区域会立刻亮起来，并直接带你进入阅读功能。",
+    "sceneLabel": "冒险地图"
+  },
+  "nav": {
+    "home": "星球地图",
+    "library": "书架港",
+    "settings": "设置",
+    "switchLanguage": "English"
+  },
+  "mascot": {
+    "welcome": "你好呀！我是小光，你的阅读伙伴！让我们一起探索阅读星球吧！",
+    "uploadHint": "想读点什么吗？上传一本书，我来帮你阅读！",
+    "readingStart": "好棒的选择！让我们开始阅读吧。需要帮助的话我就在这里哦！",
+    "encouragement": "你做得太棒了！继续加油！",
+    "tryAgain": "差一点就对了！我们再试一次！",
+    "goodbye": "今天辛苦了！明天见！"
+  },
+  "library": {
+    "title": "书架港",
+    "subtitle": "你的阅读收藏",
+    "upload": "上传书籍",
+    "empty": "还没有书呢！上传你的第一本书开始阅读吧。",
+    "search": "搜索书籍...",
+    "delete": "移除",
+    "deleteConfirm": "要把这本书从书架上移除吗？",
+    "readNow": "开始阅读"
+  },
+  "upload": {
+    "title": "上传书籍",
+    "dragDrop": "把文件拖到这里",
+    "or": "或者",
+    "browse": "选择文件",
+    "supportedFormats": "支持: PDF, TXT (最大 20MB)",
+    "uploading": "小光正在准备你的书...",
+    "success": "你的书准备好了！可以开始阅读啦！",
+    "error": {
+      "tooLarge": "这个文件太大了！请试试小一点的文件（最大 20MB）。",
+      "unsupported": "哎呀！我只能读 PDF 和 TXT 文件哦。",
+      "empty": "这个文件好像是空的，试试其他的吧！",
+      "generic": "出了点问题，我们再试一次吧！"
+    }
+  },
+  "reading": {
+    "title": "阅读中",
+    "focusMode": {
+      "label": "聚焦模式",
+      "singleLine": "聚光灯",
+      "slidingWindow": "窗口",
+      "karaoke": "卡拉OK"
+    },
+    "letterHelper": {
+      "label": "字母助手",
+      "on": "开启",
+      "off": "关闭",
+      "detective": "字母侦探游戏"
+    },
+    "tts": {
+      "play": "读给我听",
+      "pause": "暂停",
+      "stop": "停止",
+      "speed": "速度",
+      "followAlong": "跟读"
+    },
+    "settings": {
+      "fontSize": "文字大小",
+      "lineSpacing": "行间距",
+      "maskOpacity": "遮罩深度",
+      "font": "字体",
+      "theme": "主题"
+    },
+    "themes": {
+      "flashlight": "手电筒",
+      "magnifier": "放大镜",
+      "magicWand": "魔法棒"
+    },
+    "progress": {
+      "line": "第 {current} 行，共 {total} 行",
+      "complete": "你读完了整篇文章！太厉害了！"
+    }
+  },
+  "game": {
+    "detective": {
+      "title": "字母侦探",
+      "instruction": "找出所有的 '{letter}' 字母！点击它们来标记！",
+      "found": "已找到",
+      "total": "总共",
+      "complete": "你全部找到了！了不起的侦探！",
+      "star": "你获得了一颗星星！"
+    }
+  },
+  "settings": {
+    "title": "设置",
+    "language": "语言",
+    "display": "显示",
+    "reading": "阅读",
+    "timeLimit": "每日阅读时间",
+    "minutes": "{count} 分钟"
+  },
+  "feedback": {
+    "tryAgain": "差一点！我们再试一次！💪",
+    "great": "做得太棒了！⭐",
+    "keepGoing": "你做得很好！继续加油！🌟",
+    "finished": "你做到了！为你骄傲！🎉"
+  }
+}

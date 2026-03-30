@@ -1,0 +1,126 @@
+{
+  "app": {
+    "name": "ReadingStar Planet",
+    "tagline": "Your Reading Adventure Starts Here!"
+  },
+  "map": {
+    "harbor": "Bookshelf Harbor",
+    "harborDesc": "Upload books and start reading!",
+    "island": "Spotlight Island",
+    "islandDesc": "Read with focus — one line at a time!",
+    "bay": "Letter Bay",
+    "bayDesc": "Letters get colors to help you tell them apart!",
+    "valley": "Echo Valley",
+    "valleyDesc": "Listen to stories read aloud!",
+    "blocks": "Sound Block Island",
+    "blocksDesc": "Play with sounds and build words!",
+    "beach": "Sand Writing Beach",
+    "beachDesc": "Draw letters in the sand!",
+    "factory": "Word Factory",
+    "factoryDesc": "Build words with sounds and letters!",
+    "comingSoon": "Coming Soon",
+    "intro": "Move across the scene to light up the harbor, island, bay, valley, and beach, then jump straight into each reading activity.",
+    "sceneLabel": "Adventure Map"
+  },
+  "nav": {
+    "home": "Planet Map",
+    "library": "Bookshelf Harbor",
+    "settings": "Settings",
+    "switchLanguage": "中文"
+  },
+  "mascot": {
+    "welcome": "Hi there! I'm Lumi, your reading buddy! Let's explore the Reading Planet together!",
+    "uploadHint": "Want to read something? Upload a book and I'll help you read it!",
+    "readingStart": "Great choice! Let's start reading. I'll be right here if you need help!",
+    "encouragement": "You're doing amazing! Keep going!",
+    "tryAgain": "Almost there! Let's try once more!",
+    "goodbye": "Great job today! See you tomorrow!"
+  },
+  "library": {
+    "title": "Bookshelf Harbor",
+    "subtitle": "Your reading collection",
+    "upload": "Upload a Book",
+    "empty": "No books yet! Upload your first book to start reading.",
+    "search": "Search books...",
+    "delete": "Remove",
+    "deleteConfirm": "Remove this book from your shelf?",
+    "readNow": "Read Now"
+  },
+  "upload": {
+    "title": "Upload a Book",
+    "dragDrop": "Drag & drop your file here",
+    "or": "or",
+    "browse": "Choose a File",
+    "supportedFormats": "Supported: PDF, TXT (Max 20MB)",
+    "uploading": "Lumi is preparing your book...",
+    "success": "Your book is ready to read!",
+    "error": {
+      "tooLarge": "This file is too big! Please try a smaller file (max 20MB).",
+      "unsupported": "Oops! I can only read PDF and TXT files.",
+      "empty": "This file seems empty. Try another one!",
+      "generic": "Something went wrong. Let's try again!"
+    }
+  },
+  "reading": {
+    "title": "Reading",
+    "focusMode": {
+      "label": "Focus Mode",
+      "singleLine": "Spotlight",
+      "slidingWindow": "Window",
+      "karaoke": "Karaoke"
+    },
+    "letterHelper": {
+      "label": "Letter Helper",
+      "on": "ON",
+      "off": "OFF",
+      "detective": "Letter Detective Game"
+    },
+    "tts": {
+      "play": "Read to Me",
+      "pause": "Pause",
+      "stop": "Stop",
+      "speed": "Speed",
+      "followAlong": "Follow Along"
+    },
+    "settings": {
+      "fontSize": "Text Size",
+      "lineSpacing": "Line Spacing",
+      "maskOpacity": "Mask Darkness",
+      "font": "Font",
+      "theme": "Theme"
+    },
+    "themes": {
+      "flashlight": "Flashlight",
+      "magnifier": "Magnifier",
+      "magicWand": "Magic Wand"
+    },
+    "progress": {
+      "line": "Line {current} of {total}",
+      "complete": "You finished the whole text! Amazing!"
+    }
+  },
+  "game": {
+    "detective": {
+      "title": "Letter Detective",
+      "instruction": "Find all the '{letter}' letters! Tap them to mark!",
+      "found": "found",
+      "total": "total",
+      "complete": "You found them all! Great detective work!",
+      "star": "You earned a star!"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "display": "Display",
+    "reading": "Reading",
+    "timeLimit": "Daily Reading Time",
+    "minutes": "{count} minutes"
+  },
+  "feedback": {
+    "tryAgain": "Almost! Let's try once more! 💪",
+    "great": "Awesome job! ⭐",
+    "keepGoing": "You're doing great! Keep going! 🌟",
+    "finished": "You did it! So proud of you! 🎉"
+  }
+}

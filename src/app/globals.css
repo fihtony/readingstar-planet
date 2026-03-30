@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+:root {
+  /* ReadingStar Planet color palette — warm, kid-friendly */
+  --color-warm-orange: #FF8C42;
+  --color-sky-blue: #4ECDC4;
+  --color-grass-green: #7BC950;
+  --color-lavender: #9B8EC2;
+  --color-lemon-yellow: #FFE66D;
+
+  /* Letter confusion colors */
+  --color-letter-b: #4A90D9;  /* Blue for b */
+  --color-letter-d: #FF8C42;  /* Orange for d */
+  --color-letter-p: #9B8EC2;  /* Purple for p */
+  --color-letter-q: #7BC950;  /* Green for q */
+
+  /* Reading defaults */
+  --reading-line-spacing: 1.8;
+  --reading-font-size: 20px;
+  --mask-opacity: 0.7;
+
+  /* UI tokens */
+  --radius: 12px;
+  --radius-lg: 16px;
+  --min-touch-target: 48px;
+}
+
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("/fonts/OpenDyslexic/OpenDyslexic-Regular.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("/fonts/OpenDyslexic/OpenDyslexic-Bold.otf") format("opentype");
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+body {
+  font-family: "OpenDyslexic", system-ui, -apple-system, sans-serif;
+  background-color: #FFF9F0;
+  color: #2D3436;
+}
+
+.skip-link {
+  position: absolute;
+  top: -48px;
+  left: 16px;
+  z-index: 100;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  background-color: white;
+  color: #2D3436;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.skip-link:focus {
+  top: 16px;
+}
+
+/* Kid-friendly button base */
+.btn-kid {
+  min-height: var(--min-touch-target);
+  min-width: var(--min-touch-target);
+  border-radius: var(--radius);
+  font-weight: bold;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+}
+
+.btn-kid:hover {
+  transform: scale(1.05);
+}
+
+.btn-kid:active {
+  transform: scale(0.98);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[role="button"]:focus-visible {
+  outline: 3px solid var(--color-sky-blue);
+  outline-offset: 3px;
+}
+
+/* Reading mask overlay */
+.reading-mask {
+  background-color: rgba(45, 52, 54, var(--mask-opacity));
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+/* Focused reading line */
+.reading-line-focused {
+  background-color: rgba(255, 230, 109, 0.3);
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+/* Letter confusion highlights */
+.letter-b { color: var(--color-letter-b); font-weight: bold; }
+.letter-d { color: var(--color-letter-d); font-weight: bold; }
+.letter-p { color: var(--color-letter-p); font-weight: bold; }
+.letter-q { color: var(--color-letter-q); font-weight: bold; }
+
+/* TTS word highlight */
+.tts-word-active {
+  background-color: rgba(78, 205, 196, 0.4);
+  border-radius: 4px;
+  padding: 0 2px;
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  :root {
+    --color-letter-b: #0000FF;
+    --color-letter-d: #FF6600;
+    --color-letter-p: #6600CC;
+    --color-letter-q: #009900;
+  }
+
+  body {
+    background-color: #FFFFFF;
+    color: #111111;
+  }
+
+  .reading-line-focused {
+    background-color: #FFF6A3;
+    outline: 2px solid #111111;
+  }
+}
