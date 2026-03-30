@@ -8,7 +8,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "ReadingStar Planet — Your Reading Adventure",
   description:
-    "A fun, kid-friendly reading assistant for children with dyslexia. Features focus reading, letter helpers, and text-to-speech.",
+    "A playful reading support app with focus reading, letter cues, and read-aloud tools.",
   manifest: "/manifest.webmanifest",
 };
 

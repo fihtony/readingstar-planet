@@ -88,7 +88,8 @@ export function useReadingFocus({
             lineIndex <= state.currentLine + 1
           );
         case "karaoke":
-          return lineIndex === state.currentLine;
+          // Karaoke shows all lines; word-level TTS highlighting is the focus mechanism
+          return true;
         default:
           return true;
       }

@@ -83,7 +83,7 @@ const ISLANDS: IslandDef[] = [
   },
   {
     key: "bay",
-    href: "/library",
+    href: "/letter-bay",
     emoji: "🔤",
     accent: "#ffe08a",
     available: true,
@@ -97,7 +97,7 @@ const ISLANDS: IslandDef[] = [
   },
   {
     key: "island",
-    href: "/library",
+    href: "/spotlight",
     emoji: "🔦",
     accent: "#b8ea59",
     available: true,
@@ -111,7 +111,7 @@ const ISLANDS: IslandDef[] = [
   },
   {
     key: "valley",
-    href: "/library",
+    href: "/echo-valley",
     emoji: "🔊",
     accent: "#b8ea59",
     available: true,
@@ -187,6 +187,17 @@ export default function HomePage() {
                 island={island}
                 active={activeKey === island.key}
                 title={map(island.key)}
+                description={
+                  island.key === "island"
+                    ? map("islandDesc")
+                    : island.key === "bay"
+                      ? map("bayDesc")
+                      : island.key === "valley"
+                        ? map("valleyDesc")
+                        : island.key === "harbor"
+                          ? map("harborDesc")
+                          : undefined
+                }
                 comingSoon={map("comingSoon")}
                 onActivate={setActiveKey}
                 onDeactivate={() => setActiveKey(null)}
@@ -216,6 +227,7 @@ function IslandOverlay({
   island,
   active,
   title,
+  description,
   comingSoon,
   onActivate,
   onDeactivate,
@@ -223,6 +235,7 @@ function IslandOverlay({
   island: IslandDef;
   active: boolean;
   title: string;
+  description?: string;
   comingSoon: string;
   onActivate: (key: IslandKey) => void;
   onDeactivate: () => void;
@@ -301,6 +314,11 @@ function IslandOverlay({
           <div className="whitespace-nowrap text-[0.62rem] font-black leading-tight text-[#5a4717] sm:text-[0.72rem]">
             {title}
           </div>
+          {available && description ? (
+            <div className="mt-0.5 max-w-[9rem] text-[0.42rem] font-bold leading-tight text-[#6d5a2a] sm:text-[0.5rem]">
+              {description}
+            </div>
+          ) : null}
           {!available ? (
             <div className="mt-0.5 text-[0.48rem] font-black uppercase tracking-[0.1em] text-[#9a8652]">
               {comingSoon}

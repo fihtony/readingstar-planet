@@ -16,6 +16,8 @@ interface ReadingFocusModeProps {
   isLineFocused: (index: number) => boolean;
   onLineClick: (index: number) => void;
   renderLine?: (line: string, index: number) => React.ReactNode;
+  /** Optional node rendered inline below the focused line (e.g. follow-along diff) */
+  focusedLineExtra?: React.ReactNode;
 }
 
 const THEME_EMOJIS: Record<ReadingTheme, string> = {
@@ -82,6 +84,7 @@ export function ReadingFocusMode({
   isLineFocused,
   onLineClick,
   renderLine,
+  focusedLineExtra,
 }: ReadingFocusModeProps) {
   const themeStyle = THEME_STYLES[theme];
   const focusedRef = useRef<HTMLSpanElement>(null);
@@ -133,7 +136,8 @@ export function ReadingFocusMode({
           <div
             key={paraIndex}
             data-paragraph={paraIndex}
-            className="relative rounded-xl px-4 py-2 transition-all duration-300"
+            className="relative cursor-pointer rounded-xl px-4 py-2 transition-all duration-300"
+            onClick={() => onLineClick(para.globalStartIndex)}
             style={{
               textIndent:
                 para.indent.length > 0
@@ -180,7 +184,6 @@ export function ReadingFocusMode({
                       filter: visible
                         ? "none"
                         : `blur(${maskOpacity * themeStyle.blurMultiplier}px)`,
-                      pointerEvents: visible ? "auto" : "none",
                       background: focused
                         ? themeStyle.focusedBackground
                         : "transparent",
@@ -188,12 +191,25 @@ export function ReadingFocusMode({
                       WebkitBoxDecorationBreak: "clone",
                       boxDecorationBreak: "clone",
                     } as React.CSSProperties}
-                    onClick={() => onLineClick(globalIndex)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onLineClick(globalIndex);
+                    }}
                   >
                     {renderLine
                       ? renderLine(sentence, globalIndex)
                       : sentence}
                   </span>
+                  {/* Inline extra content below the focused line */}
+                  {focused && focusedLineExtra && (
+                    <div
+                      className="mt-2 block w-full text-left"
+                      style={{ textIndent: 0, marginLeft: 0 }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {focusedLineExtra}
+                    </div>
+                  )}
                 </React.Fragment>
               );
             })}

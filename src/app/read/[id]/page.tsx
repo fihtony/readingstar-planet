@@ -10,12 +10,11 @@ import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import { ReadingFocusMode } from "@/components/reading/ReadingFocusMode";
 import { LetterConfusionHelper } from "@/components/reading/LetterConfusionHelper";
-import { TTSCompanion } from "@/components/reading/TTSCompanion";
 import { LetterDetectiveGame } from "@/components/reading/LetterDetectiveGame";
-import { FollowAlongChallenge } from "@/components/reading/FollowAlongChallenge";
-import { ReadingToolbar } from "@/components/reading/ReadingToolbar";
 import { BreakReminder } from "@/components/reading/BreakReminder";
 import { MascotGuide } from "@/components/mascot/MascotGuide";
+import { SettingsPanel } from "@/components/reading/SettingsPanel";
+import { FloatingControls, FollowAlongInlineDiff, useFollowAlong } from "@/components/reading/FloatingControls";
 import { useReadingFocus } from "@/hooks/useReadingFocus";
 import { useTTS } from "@/hooks/useTTS";
 import { useLetterConfusion } from "@/hooks/useLetterConfusion";
@@ -38,6 +37,7 @@ export default function ReadPage() {
   const [hasUsedTTS, setHasUsedTTS] = useState(false);
   const [isDetectiveOpen, setIsDetectiveOpen] = useState(false);
   const [settingsReady, setSettingsReady] = useState(false);
+  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [ttsPitch, setTtsPitch] = useState(1.05);
   const [ttsVoice, setTtsVoice] = useState("");
 
@@ -301,6 +301,10 @@ export default function ReadPage() {
     [tts]
   );
 
+  // Must be called unconditionally — before any early returns
+  const currentLineText = document?.lines[readingFocus.currentLine] ?? "";
+  const followAlong = useFollowAlong(currentLineText);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -319,10 +323,8 @@ export default function ReadPage() {
     );
   }
 
-  const currentLineText = document.lines[readingFocus.currentLine] || "";
-
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 pb-24">
       <BreakReminder active={!loading && !!document} />
       <h1
         className="text-xl font-bold"
@@ -335,38 +337,6 @@ export default function ReadPage() {
         message={mascot("readingStart")}
         mood="happy"
       />
-
-      <ReadingToolbar
-        focusMode={readingFocus.mode}
-        theme={readingFocus.theme}
-        letterHelperEnabled={letterConfusion.config.enabled}
-        fontSize={fontSize}
-        lineSpacing={lineSpacing}
-        maskOpacity={readingFocus.maskOpacity}
-        onFocusModeChange={readingFocus.setMode}
-        onThemeChange={readingFocus.setTheme}
-        onLetterHelperToggle={letterConfusion.toggle}
-        onOpenLetterDetective={() => setIsDetectiveOpen(true)}
-        onFontSizeChange={setFontSize}
-        onLineSpacingChange={setLineSpacing}
-        onMaskOpacityChange={readingFocus.setMaskOpacity}
-      />
-
-      <TTSCompanion
-        isPlaying={tts.isPlaying}
-        isPaused={tts.isPaused}
-        currentWordIndex={tts.currentWordIndex}
-        speed={tts.speed}
-        isSupported={tts.isSupported}
-        onPlay={handleTTSPlay}
-        onPause={tts.pause}
-        onResume={tts.resume}
-        onStop={tts.stop}
-        onSpeedChange={tts.setSpeed}
-        text={currentLineText}
-      />
-
-      <FollowAlongChallenge text={currentLineText} />
 
       <div
         className="p-6 rounded-2xl bg-white shadow-sm border border-gray-100 min-h-[400px]"
@@ -389,6 +359,15 @@ export default function ReadPage() {
           isLineVisible={readingFocus.isLineVisible}
           isLineFocused={readingFocus.isLineFocused}
           onLineClick={handleLineClick}
+          focusedLineExtra={
+            followAlong.transcript ? (
+              <FollowAlongInlineDiff
+                expectedText={currentLineText}
+                transcript={followAlong.transcript}
+                score={followAlong.score}
+              />
+            ) : undefined
+          }
           renderLine={(line, index) => {
             const isCurrent = index === readingFocus.currentLine && tts.isPlaying;
 
@@ -404,8 +383,46 @@ export default function ReadPage() {
       </div>
 
       <p className="text-center text-xs text-gray-400">
-        ⬆️ ⬇️ Arrow keys to navigate • Space to play/pause • Click a line to jump
+        ⬆️ ⬇️ Arrow keys to navigate • Space to play/pause • Click a paragraph to jump
       </p>
+
+      {/* Floating bottom bar: TTS + Follow Along + Settings gear */}
+      <FloatingControls
+        ttsSupported={tts.isSupported}
+        ttsPlaying={tts.isPlaying}
+        ttsPaused={tts.isPaused}
+        currentText={currentLineText}
+        onTtsPlay={handleTTSPlay}
+        onTtsPause={tts.pause}
+        onTtsResume={tts.resume}
+        onTtsStop={tts.stop}
+        followAlongActive={followAlong.isListening}
+        onFollowAlongStart={followAlong.start}
+        onFollowAlongStop={followAlong.stop}
+        followAlongSupported={followAlong.isSupported}
+      />
+
+      {/* Slide-out settings panel from right */}
+      <SettingsPanel
+        open={settingsPanelOpen}
+        onOpen={() => setSettingsPanelOpen(true)}
+        onClose={() => setSettingsPanelOpen(false)}
+        focusMode={readingFocus.mode}
+        theme={readingFocus.theme}
+        letterHelperEnabled={letterConfusion.config.enabled}
+        fontSize={fontSize}
+        lineSpacing={lineSpacing}
+        maskOpacity={readingFocus.maskOpacity}
+        ttsSpeed={tts.speed}
+        onFocusModeChange={readingFocus.setMode}
+        onThemeChange={readingFocus.setTheme}
+        onLetterHelperToggle={letterConfusion.toggle}
+        onOpenLetterDetective={() => setIsDetectiveOpen(true)}
+        onFontSizeChange={setFontSize}
+        onLineSpacingChange={setLineSpacing}
+        onMaskOpacityChange={readingFocus.setMaskOpacity}
+        onTtsSpeedChange={tts.setSpeed}
+      />
 
       {isDetectiveOpen ? (
         <LetterDetectiveGame
