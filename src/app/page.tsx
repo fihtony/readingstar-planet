@@ -146,10 +146,10 @@ const HOME_TITLE_STYLE: CSSProperties = {
 };
 
 const SETTINGS_ICON_STYLE: CSSProperties = {
-  right: "0.6%",
-  bottom: "1.8%",
-  width: "clamp(58px, 5vw, 84px)",
-  height: "clamp(58px, 5vw, 84px)",
+  right: "1.5%",
+  bottom: "2.6%",
+  width: "clamp(58px, 4vw, 84px)",
+  height: "clamp(58px, 4vw, 84px)",
   filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.18))",
 };
 
@@ -276,21 +276,27 @@ export default function HomePage() {
             href="/settings"
             aria-label={nav("settings")}
             title={nav("settings")}
-            className="absolute z-20 flex items-center justify-center text-black/44 transition-all duration-200 hover:scale-[1.08] hover:text-[#ccaa4b]"
+            className="group absolute z-20 block transition-transform duration-200 hover:scale-[1.08]"
             style={SETTINGS_ICON_STYLE}
           >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              fill="none"
-              className="h-[74%] w-[74%]"
-            >
-              <path
-                d="M10.634 2.91a1.2 1.2 0 0 1 2.732 0l.38 1.56a7.8 7.8 0 0 1 1.566.65l1.43-.736a1.2 1.2 0 0 1 1.95.79l.17 1.596c.476.41.9.88 1.264 1.4l1.574.112a1.2 1.2 0 0 1 .844 1.954l-.98 1.236c.066.52.068 1.044.008 1.566l.994 1.236a1.2 1.2 0 0 1-.82 1.956l-1.572.132a7.79 7.79 0 0 1-1.25 1.416l-.15 1.6a1.2 1.2 0 0 1-1.942.816l-1.442-.72a7.8 7.8 0 0 1-1.558.668l-.36 1.566a1.2 1.2 0 0 1-2.728.034l-.4-1.552a7.8 7.8 0 0 1-1.57-.63l-1.422.754a1.2 1.2 0 0 1-1.96-.764l-.19-1.594a7.8 7.8 0 0 1-1.278-1.384l-1.574-.09A1.2 1.2 0 0 1 2 14.54l.964-1.248a7.81 7.81 0 0 1-.03-1.566L1.956 10.5a1.2 1.2 0 0 1 .796-1.966l1.57-.154a7.8 7.8 0 0 1 1.23-1.434l.126-1.6a1.2 1.2 0 0 1 1.93-.844l1.452.698a7.8 7.8 0 0 1 1.548-.686z"
-                className="fill-current"
+            <div className="relative h-full w-full">
+              <Image
+                src="/images/settings_dark.png"
+                alt=""
+                fill
+                aria-hidden="true"
+                sizes="(max-width: 768px) 58px, 84px"
+                className="select-none object-contain opacity-100 transition-opacity duration-200 group-hover:opacity-0"
               />
-              <circle cx="12" cy="12" r="3.2" className="fill-[rgba(220,239,255,0.92)]" />
-            </svg>
+              <Image
+                src="/images/settings_lit.png"
+                alt=""
+                fill
+                aria-hidden="true"
+                sizes="(max-width: 768px) 58px, 84px"
+                className="select-none object-contain opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+              />
+            </div>
           </Link>
 
           <div className="absolute inset-0">
