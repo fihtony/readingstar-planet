@@ -44,6 +44,20 @@ export function FloatingControls({
   const dragActive = useRef(false);
   const dragOrigin = useRef({ mouseX: 0, mouseY: 0, posX: 0, posY: 0 });
 
+  const clampPositionToViewport = (nextPos: { x: number; y: number }) => {
+    if (!barRef.current) {
+      return nextPos;
+    }
+
+    const halfW = barRef.current.offsetWidth / 2;
+    const halfH = barRef.current.offsetHeight / 2;
+
+    return {
+      x: Math.max(halfW, Math.min(window.innerWidth - halfW, nextPos.x)),
+      y: Math.max(halfH, Math.min(window.innerHeight - halfH, nextPos.y)),
+    };
+  };
+
   useEffect(() => {
     const onMove = (e: MouseEvent | TouchEvent) => {
       if (!dragActive.current || !barRef.current) return;
@@ -51,24 +65,12 @@ export function FloatingControls({
         "touches" in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
       const clientY =
         "touches" in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
-      const halfW = barRef.current.offsetWidth / 2;
-      const halfH = barRef.current.offsetHeight / 2;
-      setPos({
-        x: Math.max(
-          halfW,
-          Math.min(
-            window.innerWidth - halfW,
-            dragOrigin.current.posX + clientX - dragOrigin.current.mouseX
-          )
-        ),
-        y: Math.max(
-          halfH,
-          Math.min(
-            window.innerHeight - halfH,
-            dragOrigin.current.posY + clientY - dragOrigin.current.mouseY
-          )
-        ),
-      });
+      setPos(
+        clampPositionToViewport({
+          x: dragOrigin.current.posX + clientX - dragOrigin.current.mouseX,
+          y: dragOrigin.current.posY + clientY - dragOrigin.current.mouseY,
+        })
+      );
     };
     const onUp = () => {
       dragActive.current = false;
@@ -82,6 +84,26 @@ export function FloatingControls({
       window.removeEventListener("mouseup", onUp);
       window.removeEventListener("touchmove", onMove);
       window.removeEventListener("touchend", onUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    const keepVisible = () => {
+      setPos((currentPos) => {
+        if (!currentPos || !barRef.current) {
+          return currentPos;
+        }
+
+        return clampPositionToViewport(currentPos);
+      });
+    };
+
+    window.addEventListener("resize", keepVisible);
+    window.visualViewport?.addEventListener("resize", keepVisible);
+
+    return () => {
+      window.removeEventListener("resize", keepVisible);
+      window.visualViewport?.removeEventListener("resize", keepVisible);
     };
   }, []);
 

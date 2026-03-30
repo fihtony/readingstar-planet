@@ -333,11 +333,6 @@ export default function ReadPage() {
         📖 {document.title}
       </h1>
 
-      <MascotGuide
-        message={mascot("readingStart")}
-        mood="happy"
-      />
-
       <div
         className="p-6 rounded-2xl bg-white shadow-sm border border-gray-100 min-h-[400px]"
         style={{
@@ -407,6 +402,7 @@ export default function ReadPage() {
         open={settingsPanelOpen}
         onOpen={() => setSettingsPanelOpen(true)}
         onClose={() => setSettingsPanelOpen(false)}
+        hintMessage={mascot("readingStart")}
         focusMode={readingFocus.mode}
         theme={readingFocus.theme}
         letterHelperEnabled={letterConfusion.config.enabled}

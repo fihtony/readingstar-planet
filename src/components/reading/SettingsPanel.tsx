@@ -9,6 +9,7 @@ interface SettingsPanelProps {
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
+  hintMessage?: string;
   focusMode: FocusMode;
   theme: ReadingTheme;
   letterHelperEnabled: boolean;
@@ -36,10 +37,26 @@ const SPEED_OPTIONS = [
   { value: 2.0, label: "🚀 2.0x" },
 ];
 
+const THEME_BUBBLE_STYLES: Record<ReadingTheme, { container: string; tail: string }> = {
+  flashlight: {
+    container: "bg-amber-50/95 border-amber-200 text-amber-900",
+    tail: "border-amber-200 bg-amber-50",
+  },
+  magnifier: {
+    container: "bg-sky-50/95 border-sky-200 text-sky-900",
+    tail: "border-sky-200 bg-sky-50",
+  },
+  "magic-wand": {
+    container: "bg-lime-50/95 border-lime-200 text-lime-900",
+    tail: "border-lime-200 bg-lime-50",
+  },
+};
+
 export function SettingsPanel({
   open,
   onOpen,
   onClose,
+  hintMessage,
   focusMode,
   theme,
   letterHelperEnabled,
@@ -57,6 +74,8 @@ export function SettingsPanel({
   onTtsSpeedChange,
 }: SettingsPanelProps) {
   const t = useTranslations("reading");
+  const [showHint, setShowHint] = React.useState(true);
+  const themeBubble = THEME_BUBBLE_STYLES[theme];
 
   const focusModes: { value: FocusMode; label: string; icon: string; desc: string }[] = [
     { value: "single-line", label: t("focusMode.singleLine"), icon: "🔦", desc: "One line at a time" },
@@ -72,23 +91,56 @@ export function SettingsPanel({
 
   return (
     <>
-      {/* Right-edge slim tab — visible only when panel is closed */}
+      {/* Right-edge owl tab — visible only when panel is closed */}
       {!open && (
-        <button
-          onClick={onOpen}
-          className="fixed right-0 top-1/3 z-[55] -translate-y-1/2 transition-transform duration-200 hover:translate-x-[-2px]"
-          aria-label="Open settings"
-          title="Open settings"
-        >
-          <Image
-            src="/images/owl-slidemenu.png"
-            alt=""
-            width={55}
-            height={165}
-            priority
-            className="pointer-events-none block h-auto w-[88px] max-w-none drop-shadow-[0_6px_12px_rgba(0,0,0,0.14)]"
-          />
-        </button>
+        <>
+          {/* Transparent dismiss layer — click anywhere outside bubble to dismiss greeting */}
+          {showHint && hintMessage && (
+            <div
+              className="fixed inset-0 z-[54]"
+              onClick={() => setShowHint(false)}
+              aria-hidden="true"
+            />
+          )}
+
+          {/* Owl + bubble container: 3px off-screen by default, full on hover or while greeting is visible */}
+          <div
+            className={`fixed right-0 top-1/3 z-[55] -translate-y-1/2 flex items-start transition-transform duration-200 ease-in-out ${
+              showHint && hintMessage ? "translate-x-0" : "translate-x-[3px] hover:translate-x-0"
+            }`}
+          >
+            {/* Greeting bubble — shown on entry, click outside to dismiss */}
+            {showHint && hintMessage && (
+              <div
+                className={`relative mr-3 mt-6 w-[220px] rounded-2xl border px-4 py-3 text-left text-sm font-medium leading-relaxed shadow-lg backdrop-blur-sm ${themeBubble.container}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {hintMessage}
+                <span
+                  className={`absolute -right-[6px] top-4 h-3 w-3 rotate-45 border-r border-b ${themeBubble.tail}`}
+                  aria-hidden="true"
+                />
+              </div>
+            )}
+
+            {/* Owl button — click to open settings panel */}
+            <button
+              onClick={() => { setShowHint(false); onOpen(); }}
+              className="block"
+              aria-label="Open settings"
+              title="Open settings"
+            >
+              <Image
+                src="/images/owl-slidemenu.png"
+                alt=""
+                width={88}
+                height={149}
+                priority
+                className="block h-auto w-[88px] max-w-none drop-shadow-[0_6px_12px_rgba(0,0,0,0.14)]"
+              />
+            </button>
+          </div>
+        </>
       )}
 
       {/* Backdrop */}
