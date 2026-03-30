@@ -46,7 +46,7 @@ const ISLANDS: IslandDef[] = [
     shape: "ellipse(49% 48% at 50% 50%)",
     labelLeft: "39%",
     labelTop: "3%",
-    lockLeft: "39%",
+    lockLeft: "41%",
     lockTop: "17%",
   },
   {
@@ -139,8 +139,90 @@ const ISLANDS: IslandDef[] = [
   },
 ];
 
+const HOME_TITLE_STYLE: CSSProperties = {
+  left: "0.8%",
+  top: "0.6%",
+  fontSize: "clamp(14px, 1.45vw, 22px)",
+};
+
+const SETTINGS_ICON_STYLE: CSSProperties = {
+  right: "0.6%",
+  bottom: "1.8%",
+  width: "clamp(58px, 5vw, 84px)",
+  height: "clamp(58px, 5vw, 84px)",
+  filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.18))",
+};
+
+const LOCK_ICON_STYLE: CSSProperties = {
+  width: "clamp(28px, 2.5vw, 42px)",
+  height: "clamp(34px, 3vw, 50px)",
+};
+
+const WORD_FACTORY_HIGHLIGHT_STYLE: CSSProperties = {
+  left: "72.0%",
+  top: "13.5%",
+  width: "30.5%",
+  height: "31.0%",
+};
+
+const SOUND_BLOCK_HIGHLIGHT_STYLE: CSSProperties = {
+  left: "28.7%",
+  top: "4.0%",
+  width: "23.9%",
+  height: "26.5%",
+};
+
+const SAND_WRITING_HIGHLIGHT_STYLE: CSSProperties = {
+  left: "53.0%",
+  top: "8.3%",
+  width: "24.6%",
+  height: "22.8%",
+};
+
+const LETTER_BAY_HIGHLIGHT_STYLE: CSSProperties = {
+  left: "-6.5%",
+  top: "19.0%",
+  width: "46.4%",
+  height: "66.1%",
+};
+
+const SPOTLIGHT_ISLAND_HIGHLIGHT_STYLE: CSSProperties = {
+  left: "34.8%",
+  top: "23.2%",
+  width: "39.4%",
+  height: "42.4%",
+};
+
+const ECHO_VALLEY_HIGHLIGHT_STYLE: CSSProperties = {
+  left: "11.1%",
+  top: "57.2%",
+  width: "51.8%",
+  height: "58.0%",
+};
+
+const SHELF_BAY_HIGHLIGHT_STYLE: CSSProperties = {
+  left: "64.9%",
+  top: "42.7%",
+  width: "37.2%",
+  height: "53.8%",
+};
+
+const MENU_TEXT_COLORS = {
+  active: {
+    title: "#5a4717",
+    description: "#6d5a2a",
+    meta: "#9a8652",
+  },
+  inactive: {
+    title: "rgba(191, 192, 193, 0.96)",
+    description: "rgba(170, 178, 188, 0.92)",
+    meta: "rgba(150, 158, 168, 0.88)",
+  },
+};
+
 export default function HomePage() {
   const map = useTranslations("map");
+  const nav = useTranslations("nav");
   const [activeKey, setActiveKey] = useState<IslandKey | null>(null);
 
   const handlePointerMove = useCallback((_: ReactPointerEvent<HTMLDivElement>) => {
@@ -152,20 +234,23 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="relative left-1/2 w-screen max-w-none -translate-x-1/2 px-3 py-4 sm:px-5 lg:px-6">
-      <div className="mx-auto max-w-[1380px]">
+    <div className="h-[100dvh] w-screen overflow-auto bg-[#dcefff]">
+      <div className="relative min-h-[100dvh] min-w-screen">
         <div
-          className="relative overflow-hidden rounded-[34px] border-[5px] border-[#efe2cb] bg-[#dcefff] shadow-[0_26px_80px_rgba(30,68,90,0.18)]"
+          className="relative overflow-hidden bg-[#dcefff]"
           onPointerMove={handlePointerMove}
           onPointerLeave={resetScene}
           onPointerCancel={resetScene}
-          style={{ aspectRatio: "1380 / 776" }}
+          style={{
+            width: "max(100vw, calc(100dvh * 1380 / 776))",
+            height: "max(100dvh, calc(100vw * 776 / 1380))",
+          }}
         >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-8%,rgba(255,255,255,0.3),transparent_26%),radial-gradient(circle_at_50%_100%,rgba(55,168,191,0.16),transparent_36%)]" />
 
           <div className="absolute inset-0">
             <Image
-              src="/images/reading-homepage.png"
+              src="/images/reading_homepage_dark.png"
               alt={map("sceneLabel")}
               fill
               priority
@@ -176,9 +261,38 @@ export default function HomePage() {
 
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(11,33,68,0.08),transparent_20%,transparent_82%,rgba(8,37,48,0.14))]" />
 
-          <div className="pointer-events-none absolute left-4 top-3 px-1 text-xs font-bold tracking-[0.12em] text-white/50 drop-shadow-[0_1px_3px_rgba(0,0,0,0.35)] sm:text-sm">
-            {map("sceneLabel")}
+          <div
+            className="pointer-events-none absolute z-20"
+            style={HOME_TITLE_STYLE}
+          >
+            <span
+              className="block font-semibold uppercase tracking-[0.16em] text-white/44 drop-shadow-[0_1px_6px_rgba(0,0,0,0.18)]"
+              style={{ fontSize: HOME_TITLE_STYLE.fontSize }}
+            >
+              ReadingStar Plannet
+            </span>
           </div>
+
+          <Link
+            href="/settings"
+            aria-label={nav("settings")}
+            title={nav("settings")}
+            className="absolute z-20 flex items-center justify-center text-black/44 transition-all duration-200 hover:scale-[1.08] hover:text-[#ccaa4b]"
+            style={SETTINGS_ICON_STYLE}
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-[74%] w-[74%]"
+            >
+              <path
+                d="M10.634 2.91a1.2 1.2 0 0 1 2.732 0l.38 1.56a7.8 7.8 0 0 1 1.566.65l1.43-.736a1.2 1.2 0 0 1 1.95.79l.17 1.596c.476.41.9.88 1.264 1.4l1.574.112a1.2 1.2 0 0 1 .844 1.954l-.98 1.236c.066.52.068 1.044.008 1.566l.994 1.236a1.2 1.2 0 0 1-.82 1.956l-1.572.132a7.79 7.79 0 0 1-1.25 1.416l-.15 1.6a1.2 1.2 0 0 1-1.942.816l-1.442-.72a7.8 7.8 0 0 1-1.558.668l-.36 1.566a1.2 1.2 0 0 1-2.728.034l-.4-1.552a7.8 7.8 0 0 1-1.57-.63l-1.422.754a1.2 1.2 0 0 1-1.96-.764l-.19-1.594a7.8 7.8 0 0 1-1.278-1.384l-1.574-.09A1.2 1.2 0 0 1 2 14.54l.964-1.248a7.81 7.81 0 0 1-.03-1.566L1.956 10.5a1.2 1.2 0 0 1 .796-1.966l1.57-.154a7.8 7.8 0 0 1 1.23-1.434l.126-1.6a1.2 1.2 0 0 1 1.93-.844l1.452.698a7.8 7.8 0 0 1 1.548-.686z"
+                className="fill-current"
+              />
+              <circle cx="12" cy="12" r="3.2" className="fill-[rgba(220,239,255,0.92)]" />
+            </svg>
+          </Link>
 
           <div className="absolute inset-0">
             {ISLANDS.map((island) => (
@@ -256,6 +370,43 @@ function IslandOverlay({
     lockLeft,
     lockTop,
   } = island;
+  const isBlocks = key === "blocks";
+  const isBeach = key === "beach";
+  const isFactory = key === "factory";
+  const isBay = key === "bay";
+  const isIsland = key === "island";
+  const isValley = key === "valley";
+  const isHarbor = key === "harbor";
+  const usesImageHighlight =
+    isBlocks || isBeach || isFactory || isBay || isIsland || isValley || isHarbor;
+
+  const highlightImageSrc = isBlocks
+    ? "/images/sound_block_lit.png"
+    : isBeach
+      ? "/images/sand_writing_lit.png"
+      : isFactory
+        ? "/images/word_factory_lit.png"
+        : isBay
+          ? "/images/letter_bay_lit.png"
+          : isIsland
+            ? "/images/spotlight_island_lit.png"
+            : isValley
+              ? "/images/echo_valley_lit.png"
+              : "/images/shelf_bay_lit.png";
+
+  const highlightImageStyle = isBlocks
+    ? SOUND_BLOCK_HIGHLIGHT_STYLE
+    : isBeach
+      ? SAND_WRITING_HIGHLIGHT_STYLE
+      : isFactory
+        ? WORD_FACTORY_HIGHLIGHT_STYLE
+        : isBay
+          ? LETTER_BAY_HIGHLIGHT_STYLE
+          : isIsland
+            ? SPOTLIGHT_ISLAND_HIGHLIGHT_STYLE
+            : isValley
+              ? ECHO_VALLEY_HIGHLIGHT_STYLE
+              : SHELF_BAY_HIGHLIGHT_STYLE;
 
   const zoneStyle: CSSProperties = {
     left: zoneLeft,
@@ -263,10 +414,10 @@ function IslandOverlay({
     width: zoneWidth,
     height: zoneHeight,
     clipPath: shape,
-    background: active
+    background: active && !usesImageHighlight
       ? `radial-gradient(circle at 50% 52%, rgba(255,255,255,0.22) 0%, ${accent}5f 28%, ${accent}36 56%, transparent 84%)`
       : "transparent",
-    boxShadow: active
+    boxShadow: active && !usesImageHighlight
       ? `inset 0 0 0 2px rgba(255,255,255,0.76), 0 0 26px 8px ${accent}60`
       : "none",
     transform: active ? "scale(1.015)" : "scale(1)",
@@ -290,37 +441,58 @@ function IslandOverlay({
     transform: active ? "translateY(-2px) scale(1.02)" : "translateY(0) scale(1)",
     background: active
       ? "linear-gradient(180deg, rgba(255,236,167,0.98), rgba(245,212,112,0.96))"
-      : "linear-gradient(180deg, rgba(255,234,156,0.96), rgba(244,206,99,0.93))",
-    borderColor: active ? "#866422" : "#9a7730",
+      : "linear-gradient(180deg, rgba(19, 71, 135, 0.9), rgba(6, 38, 76, 0.92))",
+    borderColor: active ? "#866422" : "rgba(154,184,214,0.28)",
     boxShadow: active
       ? `0 8px 0 rgba(133,102,36,0.35), 0 16px 30px rgba(32,57,85,0.2), 0 0 0 2px ${accent}35`
-      : "0 6px 0 rgba(133,102,36,0.28), 0 12px 24px rgba(32,57,85,0.12)",
+      : "0 8px 18px rgba(120, 129, 139, 0.24), inset 0 1px 0 rgba(255,255,255,0.08)",
     transition: "all 220ms ease",
+  };
+
+  const labelTitleStyle: CSSProperties = {
+    color: active ? MENU_TEXT_COLORS.active.title : MENU_TEXT_COLORS.inactive.title,
+  };
+
+  const labelDescriptionStyle: CSSProperties = {
+    color: active ? MENU_TEXT_COLORS.active.description : MENU_TEXT_COLORS.inactive.description,
+  };
+
+  const labelMetaStyle: CSSProperties = {
+    color: active ? MENU_TEXT_COLORS.active.meta : MENU_TEXT_COLORS.inactive.meta,
   };
 
   const labelCard = (
     <div
-      className="rounded-[10px] border-[2px] px-2 py-1 text-slate-700"
+      className="rounded-[10px] border-[2px] px-2 py-1"
       style={labelCardStyle}
     >
       <div className="flex items-center gap-1.5">
         <span
           className="shrink-0 text-lg leading-none"
-          style={{ filter: !available ? "grayscale(0.35)" : "none" }}
+          style={{ filter: !available && !active ? "grayscale(0.25) brightness(0.92)" : "none" }}
         >
           {emoji}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="whitespace-nowrap text-[0.62rem] font-black leading-tight text-[#5a4717] sm:text-[0.72rem]">
+          <div
+            className="whitespace-nowrap text-[0.62rem] font-black leading-tight sm:text-[0.72rem]"
+            style={labelTitleStyle}
+          >
             {title}
           </div>
           {available && description ? (
-            <div className="mt-0.5 max-w-[9rem] text-[0.42rem] font-bold leading-tight text-[#6d5a2a] sm:text-[0.5rem]">
+            <div
+              className="mt-0.5 max-w-[9rem] text-[0.42rem] font-bold leading-tight sm:text-[0.5rem]"
+              style={labelDescriptionStyle}
+            >
               {description}
             </div>
           ) : null}
           {!available ? (
-            <div className="mt-0.5 text-[0.48rem] font-black uppercase tracking-[0.1em] text-[#9a8652]">
+            <div
+              className="mt-0.5 text-[0.48rem] font-black uppercase tracking-[0.1em]"
+              style={labelMetaStyle}
+            >
               {comingSoon}
             </div>
           ) : null}
@@ -331,7 +503,25 @@ function IslandOverlay({
 
   return (
     <div className="absolute inset-0 pointer-events-none">
-      <div className="pointer-events-none absolute rounded-full" style={glowStyle} />
+      {!usesImageHighlight ? <div className="pointer-events-none absolute rounded-full" style={glowStyle} /> : null}
+
+      {usesImageHighlight && active ? (
+        <div
+          className="pointer-events-none absolute z-10"
+          style={{
+            ...highlightImageStyle,
+            animation: "islandGlow 1.8s ease-in-out infinite",
+          }}
+        >
+          <Image
+            src={highlightImageSrc}
+            alt=""
+            fill
+            aria-hidden="true"
+            className="select-none object-contain"
+          />
+        </div>
+      ) : null}
 
       {!available && lockLeft && lockTop ? (
         <div
@@ -343,11 +533,15 @@ function IslandOverlay({
             transition: "all 220ms ease",
           }}
         >
-          <svg width="28" height="33" viewBox="0 0 15 18" fill="none" aria-hidden="true">
-            <path d="M3.5 7.5V5C3.5 2.791 5.291 1 7.5 1C9.709 1 11.5 2.791 11.5 5V7.5" stroke="rgba(160,160,175,0.9)" strokeWidth="2.2" strokeLinecap="round"/>
-            <rect x="1" y="7.5" width="13" height="10" rx="2.5" fill="rgba(140,140,158,0.85)"/>
-            <circle cx="7.5" cy="12.5" r="1.7" fill="rgba(80,80,100,0.7)"/>
-          </svg>
+          <Image
+            src={active ? "/images/lock_lit.png" : "/images/lock_dark.png"}
+            alt=""
+            width={42}
+            height={50}
+            aria-hidden="true"
+            className="block select-none"
+            style={LOCK_ICON_STYLE}
+          />
         </div>
       ) : null}
 
@@ -420,17 +614,19 @@ function IslandOverlay({
               ✨
             </span>
           ))}
-          <div
-            className="pointer-events-none absolute border border-white/60"
-            style={{
-              left: zoneLeft,
-              top: zoneTop,
-              width: zoneWidth,
-              height: zoneHeight,
-              clipPath: shape,
-              animation: "islandGlow 1.8s ease-in-out infinite",
-            }}
-          />
+          {!usesImageHighlight ? (
+            <div
+              className="pointer-events-none absolute border border-white/60"
+              style={{
+                left: zoneLeft,
+                top: zoneTop,
+                width: zoneWidth,
+                height: zoneHeight,
+                clipPath: shape,
+                animation: "islandGlow 1.8s ease-in-out infinite",
+              }}
+            />
+          ) : null}
         </>
       ) : null}
     </div>

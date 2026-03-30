@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
-import { AppHeader } from "@/components/layout/AppHeader";
+import { AppShell } from "@/components/layout/AppShell";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import "./globals.css";
 
@@ -37,11 +37,7 @@ export default async function RootLayout({
           <a href="#main-content" className="skip-link">
             Skip to main content
           </a>
-          <AppHeader />
-
-          <main id="main-content" className="max-w-5xl mx-auto px-4 py-6">
-            {children}
-          </main>
+          <AppShell>{children}</AppShell>
         </NextIntlClientProvider>
       </body>
     </html>
