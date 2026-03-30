@@ -105,9 +105,10 @@ export function SettingsPanel({
 
           {/* Owl + bubble container: 3px off-screen by default, full on hover or while greeting is visible */}
           <div
-            className={`fixed right-0 top-1/3 z-[55] -translate-y-1/2 flex items-start transition-transform duration-200 ease-in-out ${
+            className={`fixed right-0 z-[55] -translate-y-full flex items-start transition-transform duration-200 ease-in-out ${
               showHint && hintMessage ? "translate-x-0" : "translate-x-[3px] hover:translate-x-0"
             }`}
+            style={{ top: "calc(33.333% + 10px)" }}
           >
             {/* Greeting bubble — shown on entry, click outside to dismiss */}
             {showHint && hintMessage && (
