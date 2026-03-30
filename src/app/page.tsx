@@ -159,51 +159,51 @@ const LOCK_ICON_STYLE: CSSProperties = {
 };
 
 const WORD_FACTORY_HIGHLIGHT_STYLE: CSSProperties = {
-  left: "72.0%",
-  top: "13.5%",
-  width: "30.5%",
-  height: "31.0%",
+  left: "71.2%",
+  top: "13.6%",
+  width: "30.0%",
+  height: "30.8%",
 };
 
 const SOUND_BLOCK_HIGHLIGHT_STYLE: CSSProperties = {
-  left: "28.7%",
+  left: "29.3%",
   top: "4.0%",
-  width: "23.9%",
+  width: "23.3%",
   height: "26.5%",
 };
 
 const SAND_WRITING_HIGHLIGHT_STYLE: CSSProperties = {
-  left: "53.0%",
+  left: "52.8%",
   top: "8.3%",
-  width: "24.6%",
+  width: "24.2%",
   height: "22.8%",
 };
 
 const LETTER_BAY_HIGHLIGHT_STYLE: CSSProperties = {
-  left: "-6.5%",
-  top: "19.0%",
-  width: "46.4%",
-  height: "66.1%",
+  left: "-4.7%",
+  top: "18.9%",
+  width: "44.85%",
+  height: "66.3%",
 };
 
 const SPOTLIGHT_ISLAND_HIGHLIGHT_STYLE: CSSProperties = {
-  left: "34.8%",
+  left: "35.35%",
   top: "23.2%",
-  width: "39.4%",
-  height: "42.4%",
+  width: "37.9%",
+  height: "42.8%",
 };
 
 const ECHO_VALLEY_HIGHLIGHT_STYLE: CSSProperties = {
-  left: "11.1%",
+  left: "12.3%",
   top: "57.2%",
-  width: "51.8%",
-  height: "58.0%",
+  width: "50.25%",
+  height: "57.9%",
 };
 
 const SHELF_BAY_HIGHLIGHT_STYLE: CSSProperties = {
-  left: "64.9%",
+  left: "64.4%",
   top: "42.7%",
-  width: "37.2%",
+  width: "36.2%",
   height: "53.8%",
 };
 
@@ -219,6 +219,9 @@ const MENU_TEXT_COLORS = {
     meta: "rgba(150, 158, 168, 0.88)",
   },
 };
+
+const HOME_SCENE_WIDTH = 1380;
+const HOME_SCENE_HEIGHT = 752;
 
 export default function HomePage() {
   const map = useTranslations("map");
@@ -237,14 +240,10 @@ export default function HomePage() {
     <div className="h-[100dvh] w-screen overflow-auto bg-[#dcefff]">
       <div className="relative min-h-[100dvh] min-w-screen">
         <div
-          className="relative overflow-hidden bg-[#dcefff]"
+          className="home-scene-frame relative overflow-hidden bg-[#dcefff]"
           onPointerMove={handlePointerMove}
           onPointerLeave={resetScene}
           onPointerCancel={resetScene}
-          style={{
-            width: "max(100vw, calc(100dvh * 1380 / 776))",
-            height: "max(100dvh, calc(100vw * 776 / 1380))",
-          }}
         >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-8%,rgba(255,255,255,0.3),transparent_26%),radial-gradient(circle_at_50%_100%,rgba(55,168,191,0.16),transparent_36%)]" />
 
@@ -322,6 +321,11 @@ export default function HomePage() {
       </div>
 
       <style jsx global>{`
+        .home-scene-frame {
+          width: max(100vw, calc(100dvh * ${HOME_SCENE_WIDTH} / ${HOME_SCENE_HEIGHT}));
+          height: max(100dvh, calc(100vw * ${HOME_SCENE_HEIGHT} / ${HOME_SCENE_WIDTH}));
+        }
+
         @keyframes mapSparkle {
           0% { opacity: 0; transform: translateY(0) scale(0.4); }
           30% { opacity: 1; transform: translateY(-8px) scale(1); }
@@ -407,6 +411,20 @@ function IslandOverlay({
             : isValley
               ? ECHO_VALLEY_HIGHLIGHT_STYLE
               : SHELF_BAY_HIGHLIGHT_STYLE;
+
+  const highlightImageSizes = isBlocks
+    ? "24vw"
+    : isBeach
+      ? "25vw"
+      : isFactory
+        ? "31vw"
+        : isBay
+          ? "46vw"
+          : isIsland
+            ? "40vw"
+            : isValley
+              ? "52vw"
+              : "38vw";
 
   const zoneStyle: CSSProperties = {
     left: zoneLeft,
@@ -518,7 +536,9 @@ function IslandOverlay({
             alt=""
             fill
             aria-hidden="true"
-            className="select-none object-contain"
+            sizes={highlightImageSizes}
+            loading="eager"
+            className="select-none object-fill"
           />
         </div>
       ) : null}

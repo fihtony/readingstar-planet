@@ -1,5 +1,5 @@
 const SERVICE_WORKER_SOURCE = `
-const CACHE_NAME = "readingstar-shell-v2";
+const CACHE_NAME = "readingstar-shell-v3";
 const STATIC_EXTENSIONS = /\\.(js|css|woff2?|otf|ttf|png|jpg|jpeg|svg|ico|webp)$/;
 
 self.addEventListener("install", (event) => {
@@ -23,9 +23,16 @@ self.addEventListener("fetch", (event) => {
   }
 
   const url = new URL(event.request.url);
+  const acceptsHtml = event.request.headers.get("accept")?.includes("text/html");
 
   // Never cache API routes or Next.js internals
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_next/")) {
+    return;
+  }
+
+  // Never cache HTML/app-route documents. Stale page shells can mismatch fresh client bundles.
+  if (event.request.mode === "navigate" || acceptsHtml) {
+    event.respondWith(fetch(event.request));
     return;
   }
 
@@ -45,19 +52,6 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
-
-  // Network-first for HTML pages (supports locale switching & fresh data)
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (response && response.status === 200) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
-        return response;
-      })
-      .catch(() => caches.match(event.request))
-  );
 });
 `;
 

@@ -8,9 +8,12 @@ export function ServiceWorkerRegister() {
       return;
     }
 
-    void navigator.serviceWorker.register("/sw.js").catch(() => {
-      // PWA support is progressive enhancement.
-    });
+    void navigator.serviceWorker
+      .register("/sw.js")
+      .then((registration) => registration.update())
+      .catch(() => {
+        // PWA support is progressive enhancement.
+      });
   }, []);
 
   return null;
