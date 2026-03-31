@@ -15,6 +15,32 @@ type AdminUserListItem = User & {
   } | null;
 };
 
+type ActivityData = {
+  user: { id: string; email: string; nickname: string; name: string; role: string };
+  readingStats: {
+    uniqueDocs: number;
+    totalReads: number;
+    totalTimeSec: number;
+    firstReadAt: string | null;
+    lastReadAt: string | null;
+  };
+  activityLogs: {
+    id: string;
+    action: string;
+    detail: string;
+    ip_address: string | null;
+    created_at: string;
+  }[];
+  auditLogs: {
+    id: string;
+    action: string;
+    target_type: string;
+    target_id: string | null;
+    detail: string;
+    created_at: string;
+  }[];
+};
+
 type SortField = "email" | "name" | "role" | "status" | "createdAt" | "lastLoginAt";
 type SortDir = "asc" | "desc";
 
@@ -55,6 +81,7 @@ export default function AdminUsersPage() {
   const [editNotes, setEditNotes] = useState("");
 
   const [actionLoading, setActionLoading] = useState(false);
+  const [activityUserId, setActivityUserId] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -337,7 +364,11 @@ export default function AdminUsersPage() {
           </thead>
           <tbody>
             {filteredUsers.map((u) => (
-              <tr key={u.id} className="border-t border-gray-100 hover:bg-gray-50/50">
+              <tr
+                key={u.id}
+                className="border-t border-gray-100 hover:bg-gray-50/50 cursor-pointer"
+                onClick={() => setActivityUserId(u.id)}
+              >
                 <td className="px-3 py-3">
                   {u.avatarUrl ? (
                     <img
@@ -382,7 +413,7 @@ export default function AdminUsersPage() {
                     "—"
                   )}
                 </td>
-                <td className="px-3 py-3">
+                <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex gap-1 flex-wrap">
                     <button
                       className="px-2 py-1 text-xs rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
@@ -577,6 +608,14 @@ export default function AdminUsersPage() {
           </div>
         </Dialog>
       )}
+
+      {/* User Activity Panel */}
+      {activityUserId && (
+        <ActivityPanel
+          userId={activityUserId}
+          onClose={() => setActivityUserId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -624,6 +663,253 @@ function Dialog({
         <h2 className="text-lg font-bold mb-4">{title}</h2>
         {children}
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  ActivityPanel — slide-in panel showing user activity              */
+/* ------------------------------------------------------------------ */
+
+function fmtDuration(totalSec: number): string {
+  if (totalSec < 60) return `${totalSec}s`;
+  const mins = Math.floor(totalSec / 60);
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  const rem = mins % 60;
+  return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`;
+}
+
+function ActionLabel({ action }: { action: string }) {
+  const map: Record<string, { label: string; color: string }> = {
+    login: { label: "Login", color: "bg-green-100 text-green-700" },
+    logout: { label: "Logout", color: "bg-gray-100 text-gray-600" },
+    profile_update: { label: "Profile Update", color: "bg-blue-100 text-blue-700" },
+    admin_action: { label: "Admin Action", color: "bg-amber-100 text-amber-700" },
+    account_deleted: { label: "Account Deleted", color: "bg-red-100 text-red-700" },
+    session_expired: { label: "Session Expired", color: "bg-gray-100 text-gray-500" },
+  };
+  const entry = map[action] ?? { label: action, color: "bg-gray-100 text-gray-600" };
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${entry.color}`}>
+      {entry.label}
+    </span>
+  );
+}
+
+function ActivityPanel({
+  userId,
+  onClose,
+}: {
+  userId: string;
+  onClose: () => void;
+}) {
+  const [data, setData] = useState<ActivityData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<"overview" | "activity" | "audit">("overview");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/admin/users/${userId}/activity`);
+        if (!res.ok) throw new Error("Failed to load activity");
+        const json = await res.json() as ActivityData;
+        if (!cancelled) setData(json);
+      } catch (e) {
+        if (!cancelled) setError((e as Error).message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void load();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const isAdmin = data?.user.role === "admin";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative flex flex-col bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full max-w-2xl mx-0 sm:mx-4 max-h-[85vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <h2 className="text-lg font-bold">
+              {data
+                ? data.user.nickname || data.user.name || data.user.email
+                : "User Activity"}
+            </h2>
+            {data && (
+              <p className="text-sm text-gray-500">{data.user.email}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                Admin
+              </span>
+            )}
+            <button
+              className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              onClick={onClose}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 px-6 pt-3 shrink-0">
+          {(["overview", "activity", ...(isAdmin ? ["audit"] : [])] as const).map((t) => (
+            <button
+              key={t}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                tab === t
+                  ? "bg-sky-100 text-sky-700"
+                  : "text-gray-500 hover:bg-gray-100"
+              }`}
+              onClick={() => setTab(t as typeof tab)}
+            >
+              {t === "overview" ? "📊 Overview" : t === "activity" ? "📋 Activity" : "🔐 Audit Log"}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {loading && (
+            <div className="flex items-center justify-center py-12 text-gray-400">
+              Loading...
+            </div>
+          )}
+          {error && (
+            <div className="rounded-xl bg-red-50 p-4 text-sm text-red-600">{error}</div>
+          )}
+          {data && !loading && (
+            <>
+              {tab === "overview" && (
+                <div className="flex flex-col gap-4">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <StatCard label="Docs Read" value={String(data.readingStats.uniqueDocs)} />
+                    <StatCard label="Total Reads" value={String(data.readingStats.totalReads)} />
+                    <StatCard
+                      label="Time Spent"
+                      value={fmtDuration(data.readingStats.totalTimeSec)}
+                    />
+                    <StatCard
+                      label="Last Active"
+                      value={
+                        data.readingStats.lastReadAt
+                          ? new Date(data.readingStats.lastReadAt).toLocaleDateString()
+                          : "Never"
+                      }
+                    />
+                  </div>
+                  {data.readingStats.firstReadAt && (
+                    <p className="text-xs text-gray-400">
+                      First read:{" "}
+                      {new Date(data.readingStats.firstReadAt).toLocaleString()}
+                    </p>
+                  )}
+                  <div>
+                    <p className="mb-2 text-sm font-medium text-gray-700">Recent Activity</p>
+                    <div className="flex flex-col gap-1">
+                      {data.activityLogs.slice(0, 5).map((log) => (
+                        <div
+                          key={log.id}
+                          className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs"
+                        >
+                          <ActionLabel action={log.action} />
+                          <span className="flex-1 truncate text-gray-500">
+                            {log.detail || "—"}
+                          </span>
+                          <span className="shrink-0 text-gray-400">
+                            {new Date(log.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      ))}
+                      {data.activityLogs.length === 0 && (
+                        <p className="text-xs text-gray-400">No activity recorded.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {tab === "activity" && (
+                <div className="flex flex-col gap-1">
+                  {data.activityLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="grid grid-cols-[auto_1fr_auto] items-start gap-2 rounded-lg bg-gray-50 px-3 py-2.5 text-xs"
+                    >
+                      <ActionLabel action={log.action} />
+                      <span className="min-w-0 break-words text-gray-600">
+                        {log.detail || "—"}
+                      </span>
+                      <div className="shrink-0 text-right text-gray-400">
+                        <div>{new Date(log.created_at).toLocaleDateString()}</div>
+                        <div>{new Date(log.created_at).toLocaleTimeString()}</div>
+                        {log.ip_address && (
+                          <div className="text-gray-300">{log.ip_address}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {data.activityLogs.length === 0 && (
+                    <p className="py-4 text-center text-sm text-gray-400">No activity recorded.</p>
+                  )}
+                </div>
+              )}
+
+              {tab === "audit" && isAdmin && (
+                <div className="flex flex-col gap-1">
+                  {data.auditLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="grid grid-cols-[auto_1fr_auto] items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-xs"
+                    >
+                      <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 whitespace-nowrap">
+                        {log.action}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="truncate text-gray-600">{log.detail || "—"}</div>
+                        <div className="text-gray-400">
+                          {log.target_type}
+                          {log.target_id ? ` · ${log.target_id}` : ""}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right text-gray-400">
+                        <div>{new Date(log.created_at).toLocaleDateString()}</div>
+                        <div>{new Date(log.created_at).toLocaleTimeString()}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {data.auditLogs.length === 0 && (
+                    <p className="py-4 text-center text-sm text-gray-400">No audit entries.</p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col items-center rounded-xl border-2 border-gray-100 bg-white p-3 text-center">
+      <span className="text-lg font-bold text-sky-600">{value}</span>
+      <span className="text-xs text-gray-500">{label}</span>
     </div>
   );
 }

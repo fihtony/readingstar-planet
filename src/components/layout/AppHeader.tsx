@@ -106,29 +106,22 @@ export function AppHeader() {
               Offline Mode
             </span>
           ) : !isAuthenticated ? (
-            /* Guest: login icon */
+            /* Guest: login button with SVG person icon */
             <button
               onClick={handleLogin}
               aria-label="Sign in with Google"
               title="Sign in with Google"
-              className="group relative flex h-12 w-12 items-center justify-center rounded-full transition-transform duration-200 hover:scale-110"
+              className="group flex h-12 w-12 items-center justify-center transition-transform duration-200 hover:scale-110"
             >
-              <Image
-                src="/images/user_login.png"
-                alt=""
-                width={32}
-                height={32}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="h-8 w-8 text-[#73839B] transition-colors duration-200 group-hover:text-[#F4C65A] group-focus-visible:text-[#F4C65A] group-active:text-[#F4C65A]"
                 aria-hidden="true"
-                className="select-none object-contain opacity-100 transition-opacity duration-200 group-hover:opacity-0 group-focus-visible:opacity-0 group-active:opacity-0"
-              />
-              <Image
-                src="/images/user_login_lit.png"
-                alt=""
-                width={32}
-                height={32}
-                aria-hidden="true"
-                className="absolute inset-0 m-auto select-none object-contain opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100"
-              />
+              >
+                <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+              </svg>
             </button>
           ) : (
             /* Authenticated: avatar + menu */
@@ -161,6 +154,13 @@ export function AppHeader() {
               </button>
               {menuOpen && (
                 <div className="absolute right-0 top-12 min-w-[180px] rounded-xl border border-gray-200 bg-white py-1 shadow-lg z-50">
+                  <Link
+                    href="/profile"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-sky-50"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    👤 My Profile
+                  </Link>
                   <Link
                     href="/settings"
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-sky-50"

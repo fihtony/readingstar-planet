@@ -91,7 +91,7 @@ export function FloatingControls({
 
     return clampPositionToViewport({
       left: left + (width - barRef.current.offsetWidth) / 2,
-      top: top + (height - barRef.current.offsetHeight) / 2,
+      top: top + height - barRef.current.offsetHeight - VIEWPORT_MARGIN * 4,
     });
   }, [clampPositionToViewport]);
 

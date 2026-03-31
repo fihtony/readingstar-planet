@@ -138,23 +138,12 @@ export default function SettingsPage() {
   const readingT = useTranslations("reading");
   const locale = useLocale();
   const router = useRouter();
-  const { isAdmin, isAuthenticated, refresh } = useAuth();
+  const { isAdmin, isAuthenticated } = useAuth();
   const csrfFetch = useCsrfFetch();
 
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
-
-  const [nickname, setNickname] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState("");
-  const [personalNote, setPersonalNote] = useState("");
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const [profileMessage, setProfileMessage] = useState<string | null>(null);
-
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteBusy, setDeleteBusy] = useState(false);
-  const [accountError, setAccountError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -187,41 +176,6 @@ export default function SettingsPage() {
     };
 
     void loadSettings();
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setNickname("");
-      setAvatarUrl("");
-      setPersonalNote("");
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadProfile = async () => {
-      try {
-        const response = await fetch("/api/account/profile");
-        if (!response.ok) {
-          throw new Error("Failed to load profile");
-        }
-        const data = await response.json();
-        if (!cancelled && data.profile) {
-          setNickname(data.profile.nickname ?? "");
-          setAvatarUrl(data.profile.avatarUrl ?? "");
-          setPersonalNote(data.profile.personalNote ?? "");
-        }
-      } catch {
-        if (!cancelled) {
-          setProfileError("Failed to load profile");
-        }
-      }
-    };
-
-    void loadProfile();
     return () => {
       cancelled = true;
     };
@@ -274,55 +228,6 @@ export default function SettingsPage() {
     },
     [csrfFetch, isAuthenticated, settings]
   );
-
-  const handleSaveProfile = async () => {
-    setProfileSaving(true);
-    setProfileError(null);
-    setProfileMessage(null);
-
-    try {
-      const response = await csrfFetch("/api/account/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nickname, avatarUrl, personalNote }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to save profile");
-      }
-
-      await refresh();
-      setProfileMessage("Profile saved.");
-    } catch (error) {
-      setProfileError(
-        error instanceof Error ? error.message : "Failed to save profile"
-      );
-    } finally {
-      setProfileSaving(false);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    setDeleteBusy(true);
-    setAccountError(null);
-
-    try {
-      const response = await csrfFetch("/api/auth/account", { method: "DELETE" });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to delete account");
-      }
-
-      await refresh();
-      window.location.href = "/library";
-    } catch (error) {
-      setAccountError(
-        error instanceof Error ? error.message : "Failed to delete account"
-      );
-      setDeleteBusy(false);
-    }
-  };
 
   const handleLocaleSwitch = async (newLocale: Locale) => {
     document.cookie = `${LOCALE_COOKIE_NAME}=${newLocale}; path=/; max-age=31536000; samesite=lax`;
@@ -545,85 +450,16 @@ export default function SettingsPage() {
       )}
 
       {isAuthenticated && (
-        <SettingsSection title="👤 Profile">
-          <div className="flex flex-col gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium">Nickname</label>
-              <input
-                type="text"
-                className="w-full max-w-xs rounded-xl border-2 border-gray-200 px-3 py-2 text-sm"
-                value={nickname}
-                onChange={(event) => setNickname(event.target.value)}
-                maxLength={100}
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">Avatar URL</label>
-              <input
-                type="url"
-                className="w-full max-w-md rounded-xl border-2 border-gray-200 px-3 py-2 text-sm"
-                value={avatarUrl}
-                onChange={(event) => setAvatarUrl(event.target.value)}
-                placeholder="https://..."
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium">Personal Note</label>
-              <textarea
-                className="w-full rounded-xl border-2 border-gray-200 px-3 py-2 text-sm resize-y"
-                rows={4}
-                value={personalNote}
-                onChange={(event) => setPersonalNote(event.target.value)}
-                maxLength={5000}
-              />
-              <p className="mt-1 text-xs text-gray-400">{personalNote.length}/5000</p>
-            </div>
-
-            {profileError && <p className="text-sm text-orange-600">{profileError}</p>}
-            {profileMessage && <p className="text-sm text-green-700">{profileMessage}</p>}
-
-            <Button
-              variant="secondary"
-              onClick={() => void handleSaveProfile()}
-              disabled={profileSaving}
-            >
-              {profileSaving ? "Saving..." : "Save Profile"}
-            </Button>
-          </div>
-        </SettingsSection>
+        <div className="rounded-2xl border-2 border-sky-100 bg-sky-50 p-4 text-sm text-sky-800">
+          Manage your nickname, avatar, and account settings on the{" "}
+          <a href="/profile" className="font-semibold underline hover:text-sky-600">
+            Profile page
+          </a>
+          .
+        </div>
       )}
 
       {isAdmin && <AdminGlobalSettingsSection />}
-
-      {isAuthenticated && !isAdmin && (
-        <SettingsSection title="⚠️ Account">
-          <p className="mb-3 text-sm text-gray-600">
-            Deleting your account performs a soft delete, signs you out immediately, and requires an administrator to restore access.
-          </p>
-          {accountError && <p className="mb-3 text-sm text-orange-600">{accountError}</p>}
-          {!showDeleteConfirm ? (
-            <Button variant="ghost" onClick={() => setShowDeleteConfirm(true)}>
-              Delete My Account
-            </Button>
-          ) : (
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-sm font-medium text-orange-600">Are you sure?</span>
-              <Button variant="ghost" onClick={() => setShowDeleteConfirm(false)}>
-                Cancel
-              </Button>
-              <button
-                className="rounded-xl bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-50"
-                onClick={() => void handleDeleteAccount()}
-                disabled={deleteBusy}
-              >
-                {deleteBusy ? "Deleting..." : "Yes, Delete"}
-              </button>
-            </div>
-          )}
-        </SettingsSection>
-      )}
     </div>
   );
 }
@@ -677,6 +513,13 @@ function VoiceSettingsSection({
       return;
     }
 
+    // Stop if already previewing
+    if (previewing) {
+      window.speechSynthesis.cancel();
+      setPreviewing(false);
+      return;
+    }
+
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(
       "Hello! I'm your reading buddy. Let's read together!"
@@ -694,7 +537,7 @@ function VoiceSettingsSection({
     utterance.onend = () => setPreviewing(false);
     utterance.onerror = () => setPreviewing(false);
     window.speechSynthesis.speak(utterance);
-  }, [settings.ttsPitch, settings.ttsSpeed, settings.ttsVoice, voices]);
+  }, [previewing, settings.ttsPitch, settings.ttsSpeed, settings.ttsVoice, voices]);
 
   return (
     <SettingsSection title="🗣️ Voice / TTS">
@@ -707,7 +550,9 @@ function VoiceSettingsSection({
             onChange={(event) => void updateSetting("ttsVoice", event.target.value)}
           >
             <option value="">Auto (best available)</option>
-            {voices.map((voice) => (
+            {voices
+              .filter((voice) => voice.lang.startsWith("en"))
+              .map((voice) => (
               <option key={voice.name} value={voice.name}>
                 {voice.name} ({voice.lang})
               </option>
@@ -738,8 +583,8 @@ function VoiceSettingsSection({
         </div>
 
         <div>
-          <Button variant="secondary" onClick={handlePreview} disabled={previewing}>
-            {previewing ? "🔊 Playing..." : "🔊 Preview Voice"}
+          <Button variant="secondary" onClick={handlePreview}>
+            {previewing ? "⏹ Stop" : "🔊 Preview Voice"}
           </Button>
         </div>
       </div>
@@ -890,7 +735,11 @@ function AdminGlobalSettingsSection() {
   );
 
   return (
-    <SettingsSection title="🛡️ Admin: Global Defaults">
+    <section className="rounded-2xl border-2 border-amber-200 bg-amber-50 p-5 relative overflow-hidden">
+      {/* Subtle decorative stripe on the left edge */}
+      <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-amber-400" aria-hidden="true" />
+      <h2 className="mb-1 text-lg font-bold text-amber-900">🛡️ Admin: Global Defaults</h2>
+      <p className="mb-4 text-xs font-medium text-amber-700/70 uppercase tracking-wide">Admin only</p>
       {loading || !settings ? (
         <p className="text-sm text-gray-500">Loading admin settings...</p>
       ) : (
@@ -1052,6 +901,6 @@ function AdminGlobalSettingsSection() {
 
       {saving && <p className="mt-4 text-xs text-amber-700">Saving admin settings...</p>}
       {error && <p className="mt-4 text-sm text-orange-600">{error}</p>}
-    </SettingsSection>
+    </section>
   );
 }
