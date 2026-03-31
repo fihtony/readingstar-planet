@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const appRoot = "/Users/tony/projects/reading/app";
+const e2eDbPath = `${appRoot}/data/reading-star.e2e.db`;
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -8,7 +11,7 @@ export default defineConfig({
   workers: 1,
   reporter: "html",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: "http://127.0.0.1:3100",
     trace: "on-first-retry",
   },
   projects: [
@@ -22,8 +25,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
+    command: `rm -f ${e2eDbPath} ${e2eDbPath}-shm ${e2eDbPath}-wal && READINGSTAR_DB_PATH=${e2eDbPath} READINGSTAR_DISABLE_SAMPLE_SEED=1 npm --prefix ${appRoot} run build && READINGSTAR_DB_PATH=${e2eDbPath} READINGSTAR_DISABLE_SAMPLE_SEED=1 npm --prefix ${appRoot} run start -- --port 3100`,
+    url: "http://127.0.0.1:3100",
+    reuseExistingServer: false,
+    timeout: 180000,
   },
 });

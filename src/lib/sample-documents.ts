@@ -126,6 +126,10 @@ export const SAMPLE_DOCUMENTS: SampleDocumentSeed[] = [
 const SAMPLE_METADATA_KEY = "sample_documents_seeded_v3";
 
 export function seedSampleDocuments(db: Database.Database): number {
+  if (process.env.READINGSTAR_DISABLE_SAMPLE_SEED === "1") {
+    return 0;
+  }
+
   const alreadySeeded = db
     .prepare("SELECT value FROM app_metadata WHERE key = ?")
     .get(SAMPLE_METADATA_KEY) as { value: string } | undefined;

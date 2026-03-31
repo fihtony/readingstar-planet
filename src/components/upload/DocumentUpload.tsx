@@ -8,6 +8,7 @@ import React, {
   type DragEvent,
 } from "react";
 import { useTranslations } from "next-intl";
+import { validateFile } from "@/lib/pdf-parser";
 import type { DocumentGroup } from "@/types";
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -46,6 +47,22 @@ function titleFromFilename(filename: string): string {
 function titleFromText(text: string): string {
   const firstLine = text.split(/\r?\n/).find((l) => l.trim().length > 0) ?? "";
   return firstLine.trim().slice(0, 60) || "";
+}
+
+function toClientValidationMessage(
+  error: string,
+  t: ReturnType<typeof useTranslations>
+): string {
+  if (error.includes("Unsupported file type")) {
+    return t("error.unsupported");
+  }
+  if (error.includes("File too large")) {
+    return t("error.tooLarge");
+  }
+  if (error.includes("File is empty")) {
+    return t("error.empty");
+  }
+  return error;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -101,6 +118,12 @@ export function DocumentUpload({
       setParseError(null);
 
       try {
+        const validation = validateFile(file.name, file.type, file.size);
+        if (!validation.valid) {
+          setParseError(toClientValidationMessage(validation.error ?? "", t));
+          return;
+        }
+
         const ext = file.name.split(".").pop()?.toLowerCase();
 
         if (ext === "pdf") {
@@ -411,6 +434,7 @@ function PreviewStep({
           onChange={(e) => onTitleChange(e.target.value)}
           className="rounded-xl border-2 border-sky-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm focus:border-sky-400 focus:outline-none"
           placeholder={t("titlePlaceholder")}
+          aria-label={t("textTitle")}
         />
       </div>
 
@@ -425,6 +449,7 @@ function PreviewStep({
               value={groupId ?? ""}
               onChange={(e) => onGroupChange(e.target.value || null)}
               className="w-full appearance-none rounded-xl border-2 border-sky-200 bg-gray-100 py-3 pl-4 pr-16 text-sm focus:border-sky-400 focus:outline-none"
+              aria-label={t("importGroup")}
             >
               <option value="">{t("noGroup")}</option>
               {groups.map((g) => (

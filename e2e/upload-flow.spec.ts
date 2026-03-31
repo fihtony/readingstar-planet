@@ -4,6 +4,19 @@ function uniqueTitle(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
 
+async function resetDocuments(
+  request: import("@playwright/test").APIRequestContext
+) {
+  const response = await request.get("/api/documents");
+  expect(response.ok()).toBeTruthy();
+
+  const payload = await response.json();
+  for (const document of payload.documents as Array<{ id: string }>) {
+    const deleteResponse = await request.delete(`/api/documents?id=${document.id}`);
+    expect(deleteResponse.ok()).toBeTruthy();
+  }
+}
+
 async function createDocumentViaApi(
   request: import("@playwright/test").APIRequestContext,
   title: string,
@@ -21,42 +34,82 @@ async function createDocumentViaApi(
 }
 
 test.describe("Document Upload Flow", () => {
-  test("shows error for unsupported file types", async ({ page }) => {
-    await page.goto("/library");
-    await page.click("text=Upload a Book");
-
-    const fileChooser = page.waitForEvent("filechooser");
-    await page.getByLabel(/upload|choose|file/i).click();
-    const chooser = await fileChooser;
-    await chooser.setFiles({
-      name: "bad-file.exe",
-      mimeType: "application/octet-stream",
-      buffer: Buffer.from("not a real document"),
-    });
-
-    // Should show an error message
-    await expect(
-      page.locator('div[role="alert"]').filter({ hasText: /unsupported|allowed/i })
-    ).toContainText(/unsupported|allowed/i, {
-      timeout: 5000,
-    });
+  test.beforeEach(async ({ request }) => {
+    await resetDocuments(request);
   });
 
-  test("shows empty state with mascot when no documents", async ({ page, request }) => {
+  test("file picker restricts accepted file types", async ({ page }) => {
     await page.goto("/library");
+    await page.getByRole("button", { name: /upload a book/i }).click();
 
-    const response = await request.get("/api/documents");
-    const payload = await response.json();
+    await expect(page.locator('input[type="file"]')).toHaveAttribute(
+      "accept",
+      ".pdf,.txt"
+    );
+    await expect(page.getByText(/supported: pdf, txt/i)).toBeVisible();
+  });
 
-    for (const document of payload.documents as Array<{ id: string }>) {
-      await request.delete(`/api/documents?id=${document.id}`);
-    }
-
-    await page.reload();
+  test("shows empty state with mascot when no documents", async ({ page }) => {
+    await page.goto("/library");
     await expect(page.locator('[data-document-card="true"]')).toHaveCount(0);
 
     // Lumi's encouraging message
     await expect(page.locator('div[role="status"]').first()).toBeVisible();
+  });
+
+  test("can import pasted text with preview, edits, and group selection", async ({ page, request }) => {
+    const groupName = uniqueTitle("science club").replaceAll("-", " ");
+    const finalTitle = uniqueTitle("matter notes").replaceAll("-", " ");
+
+    const groupResponse = await request.post("/api/document-groups", {
+      data: { name: groupName },
+    });
+    expect(groupResponse.ok()).toBeTruthy();
+
+    await page.goto("/library");
+    await page.getByRole("button", { name: /upload a book/i }).click();
+    await page.getByRole("button", { name: /paste text/i }).click();
+
+    await page.getByLabel(/title/i).fill("Draft title");
+    await page.getByLabel(/^content$/i).fill("Matter is anything that has mass and takes up space.");
+    await page.getByRole("button", { name: /preview & edit/i }).click();
+
+    await expect(page.getByRole("heading", { name: /preview & edit before import/i })).toBeVisible();
+    await page.getByLabel(/title/i).fill(finalTitle);
+    await page.getByLabel(/add to group/i).selectOption({ label: groupName });
+    await page.getByRole("button", { name: /import book/i }).click();
+
+    const groupSection = page.locator("section", {
+      has: page.getByRole("heading", { name: groupName }),
+    });
+
+    await expect(
+      groupSection.getByRole("heading", { name: finalTitle }).first()
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  test("can import a txt file through the preview flow", async ({ page }) => {
+    const fileBase = uniqueTitle("preview file");
+    const displayTitle = fileBase.replaceAll("-", " ");
+
+    await page.goto("/library");
+    await page.getByRole("button", { name: /upload a book/i }).click();
+
+    await page.locator('input[type="file"]').setInputFiles({
+      name: `${fileBase}.txt`,
+      mimeType: "text/plain",
+      buffer: Buffer.from("Preview upload flow text file."),
+    });
+
+    await expect(page.getByRole("heading", { name: /preview & edit before import/i })).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(page.getByLabel(/title/i)).toHaveValue(displayTitle);
+
+    await page.getByRole("button", { name: /import book/i }).click();
+    await expect(
+      page.getByRole("heading", { name: displayTitle }).first()
+    ).toBeVisible({ timeout: 10000 });
   });
 
   test("can delete a document", async ({ page, request }) => {

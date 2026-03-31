@@ -4,6 +4,19 @@ function uniqueTitle(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
 
+async function resetDocuments(
+  request: import("@playwright/test").APIRequestContext
+) {
+  const response = await request.get("/api/documents");
+  expect(response.ok()).toBeTruthy();
+
+  const payload = await response.json();
+  for (const document of payload.documents as Array<{ id: string }>) {
+    const deleteResponse = await request.delete(`/api/documents?id=${document.id}`);
+    expect(deleteResponse.ok()).toBeTruthy();
+  }
+}
+
 async function createDocumentViaApi(
   request: import("@playwright/test").APIRequestContext,
   title: string,
@@ -33,16 +46,15 @@ async function openDocumentByTitle(
 }
 
 test.describe("Reading Flow", () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, request }) => {
+    await resetDocuments(request);
     await page.goto("/");
   });
 
   test("home page loads with planet map", async ({ page }) => {
+    await expect(page).toHaveTitle(/readingstar planet/i);
     await expect(
-      page.getByRole("link", { name: /readingstar planet/i })
-    ).toBeVisible();
-    await expect(
-      page.locator('a[href="/library"]').filter({ hasText: "Bookshelf Harbor" }).last()
+      page.getByRole("link", { name: /bookshelf harbor/i }).first()
     ).toBeVisible();
     await expect(page.getByText("Spotlight Island")).toBeVisible();
     await expect(page.getByText("Echo Valley")).toBeVisible();
@@ -71,6 +83,10 @@ test.describe("Reading Flow", () => {
 });
 
 test.describe("Upload and Read Flow", () => {
+  test.beforeEach(async ({ request }) => {
+    await resetDocuments(request);
+  });
+
   test("can upload a text file and read it", async ({ page, request }) => {
     const displayTitle = uniqueTitle("test story").replaceAll("-", " ");
 
@@ -118,6 +134,7 @@ test.describe("Upload and Read Flow", () => {
     await card.getByRole("button", { name: /read now/i }).click();
     await expect(page).toHaveURL(/\/read\//);
     await page.reload();
+    await page.waitForTimeout(300);
     await page.goto("/library");
     await expect(page).toHaveURL(/\/library/);
     await expect(card.getByText(/2 reads/i)).toBeVisible({ timeout: 10000 });
@@ -134,7 +151,14 @@ test.describe("Upload and Read Flow", () => {
         String(Date.now() - 31 * 60 * 1000)
       );
     }, documentId);
+    const incrementResponse = page.waitForResponse((response) => {
+      return response.url().includes("/api/documents")
+        && response.request().method() === "PATCH"
+        && response.request().postData()?.includes("increment-read-count")
+        && response.status() === 200;
+    });
     await page.reload();
+    await incrementResponse;
     await page.goto("/library");
     await expect(page).toHaveURL(/\/library/);
     await expect(card.getByText(/4 reads/i)).toBeVisible({ timeout: 10000 });
@@ -142,6 +166,10 @@ test.describe("Upload and Read Flow", () => {
 });
 
 test.describe("Reading Controls", () => {
+  test.beforeEach(async ({ request }) => {
+    await resetDocuments(request);
+  });
+
   test("keyboard navigation works on read page", async ({ page, request }) => {
     const displayTitle = uniqueTitle("nav test").replaceAll("-", " ");
 
@@ -160,7 +188,6 @@ test.describe("Reading Controls", () => {
     await expect(page.locator('[data-line-index="0"]').first()).toBeVisible({
       timeout: 10000,
     });
-    await page.locator('[data-line-index="0"]').first().click();
 
     // Press down arrow to advance line
     await page.keyboard.press("ArrowDown");
