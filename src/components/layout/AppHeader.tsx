@@ -1,63 +1,48 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useLocale, useTranslations } from "next-intl";
-import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
+import { useTranslations } from "next-intl";
+import { AppWordmark } from "@/components/layout/AppBranding";
 
 export function AppHeader() {
   const nav = useTranslations("nav");
   const app = useTranslations("app");
-  const locale = useLocale();
-  const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-gray-100">
+    <header className="sticky top-0 z-50 bg-[#0b2144]/85 backdrop-blur-md border-b border-white/10">
       <nav className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
         <Link
           href="/"
-          className="flex items-center gap-2 text-xl font-bold"
-          style={{ color: "var(--color-warm-orange)" }}
+          aria-label={app("name")}
+          className="flex min-w-0 items-center transition-opacity hover:opacity-80"
         >
-          <span className="text-2xl">🌍</span>
-          <span className="hidden sm:inline">{app("name")}</span>
+          <AppWordmark className="block max-w-full truncate" />
         </Link>
-        <div className="flex items-center gap-2">
-          <NavLink href="/" active={pathname === "/"}>
-            🗺️ <span className="hidden sm:inline">{nav("home")}</span>
-          </NavLink>
-          <NavLink href="/library" active={pathname === "/library"}>
-            📚 <span className="hidden sm:inline">{nav("library")}</span>
-          </NavLink>
-          <NavLink href="/settings" active={pathname === "/settings"}>
-            ⚙️ <span className="hidden sm:inline">{nav("settings")}</span>
-          </NavLink>
-          <LanguageSwitcher currentLocale={locale} />
-        </div>
+        <Link
+          href="/settings"
+          aria-label={nav("settings")}
+          title={nav("settings")}
+          className="group relative flex h-10 w-10 items-center justify-center rounded-full transition-transform duration-200 hover:scale-110"
+        >
+          <Image
+            src="/images/settings_dark.png"
+            alt=""
+            width={32}
+            height={32}
+            aria-hidden="true"
+            className="select-none object-contain opacity-100 transition-opacity duration-200 group-hover:opacity-0"
+          />
+          <Image
+            src="/images/settings_lit.png"
+            alt=""
+            width={32}
+            height={32}
+            aria-hidden="true"
+            className="absolute inset-0 m-auto select-none object-contain opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+          />
+        </Link>
       </nav>
     </header>
-  );
-}
-
-function NavLink({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`btn-kid px-3 py-2 text-sm rounded-xl ${
-        active
-          ? "bg-sky-100 text-sky-700 border-2 border-sky-200"
-          : "bg-gray-50 text-gray-600 hover:bg-sky-50"
-      }`}
-    >
-      {children}
-    </Link>
   );
 }

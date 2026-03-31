@@ -14,7 +14,12 @@ import {
   listDocuments,
   searchDocuments,
   deleteDocument,
+  moveDocumentToGroup,
 } from "@/lib/repositories/document-repository";
+import {
+  createDocumentGroup,
+  listDocumentGroups,
+} from "@/lib/repositories/document-group-repository";
 
 describe("document-repository", () => {
   beforeEach(() => {
@@ -47,11 +52,48 @@ describe("document-repository", () => {
 
     expect(doc.id).toBeDefined();
     expect(doc.title).toBe("Test Book");
+    expect(doc.groupId).toBeTruthy();
+    expect(doc.groupPosition).toBe(0);
 
     const fetched = getDocumentById(doc.id);
     expect(fetched).toBeDefined();
     expect(fetched!.title).toBe("Test Book");
     expect(fetched!.content).toBe("Hello world of reading.");
+    expect(fetched!.groupId).toBe(doc.groupId);
+  });
+
+  it("creates a default group for uploaded documents", () => {
+    createDocument({
+      title: "Grouped Book",
+      content: "Hello world of reading.",
+      originalFilename: "grouped-book.txt",
+      fileType: "txt",
+      fileSize: 100,
+      uploadedBy: "user-1",
+    });
+
+    const groups = listDocumentGroups("user-1");
+    expect(groups).toHaveLength(1);
+    expect(groups[0].name).toBe("My Books");
+  });
+
+  it("moves a document into another group", () => {
+    const doc = createDocument({
+      title: "Move Me",
+      content: "Hello world of reading.",
+      originalFilename: "move-me.txt",
+      fileType: "txt",
+      fileSize: 100,
+      uploadedBy: "user-1",
+    });
+    const otherGroup = createDocumentGroup({
+      userId: "user-1",
+      name: "Science",
+    });
+
+    const moved = moveDocumentToGroup(doc.id, otherGroup.id);
+    expect(moved).not.toBeNull();
+    expect(moved!.groupId).toBe(otherGroup.id);
   });
 
   it("lists all documents newest first", () => {

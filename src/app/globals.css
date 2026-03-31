@@ -47,6 +47,11 @@ body {
   color: #2D3436;
 }
 
+.app-scene-frame {
+  width: min(100vw, calc(100dvh * 1380 / 752));
+  height: min(100dvh, calc(100vw * 752 / 1380));
+}
+
 .skip-link {
   position: absolute;
   top: -48px;

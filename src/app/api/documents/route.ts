@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createDocument, getDocumentById, listDocuments, searchDocuments, deleteDocument } from "@/lib/repositories/document-repository";
+import { createDocument, getDocumentById, listDocuments, searchDocuments, deleteDocument, moveDocumentToGroup } from "@/lib/repositories/document-repository";
+import { ensureDefaultDocumentGroup, listDocumentGroups } from "@/lib/repositories/document-group-repository";
 import { validateFile, extractTextFromPDF, extractTextFromTXT, titleFromFilename } from "@/lib/pdf-parser";
 import { sanitizeTextContent } from "@/lib/text-processor";
+
+const DEFAULT_USER_ID = "default-user";
 
 export async function GET(request: NextRequest) {
   const id = request.nextUrl.searchParams.get("id");
@@ -15,14 +18,49 @@ export async function GET(request: NextRequest) {
   }
 
   const search = request.nextUrl.searchParams.get("search");
+  ensureDefaultDocumentGroup(DEFAULT_USER_ID);
   const documents = search ? searchDocuments(search) : listDocuments();
-  return NextResponse.json({ documents });
+  const groups = listDocumentGroups(DEFAULT_USER_ID);
+  return NextResponse.json({ documents, groups });
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const contentType = request.headers.get("content-type") ?? "";
+
+    // ── JSON body path: { title, content, groupId? } ──────────────────────
+    if (contentType.includes("application/json")) {
+      const body = await request.json();
+      const title = (body.title as string | undefined)?.trim();
+      const content = body.content as string | undefined;
+      const groupId = (body.groupId as string | null | undefined) ?? null;
+
+      if (!title || !content?.trim()) {
+        return NextResponse.json(
+          { error: "title and content are required" },
+          { status: 400 }
+        );
+      }
+
+      const sanitized = sanitizeTextContent(content);
+      const doc = createDocument({
+        title,
+        content: sanitized,
+        originalFilename: `${title}.txt`,
+        fileType: "txt",
+        fileSize: Buffer.byteLength(sanitized, "utf8"),
+        uploadedBy: DEFAULT_USER_ID,
+        groupId,
+      });
+
+      return NextResponse.json({ document: doc }, { status: 201 });
+    }
+
+    // ── FormData path: file upload (supports optional titleOverride + groupId) ──
     const formData = await request.formData();
     const file = formData.get("file");
+    const titleOverride = (formData.get("titleOverride") as string | null)?.trim() || null;
+    const groupId = (formData.get("groupId") as string | null) || null;
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json(
@@ -58,11 +96,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Sanitize the extracted text
     content = sanitizeTextContent(content);
-
-    // Build the document record
-    const title = titleFromFilename(file.name);
+    const title = titleOverride ?? titleFromFilename(file.name);
 
     const doc = createDocument({
       title,
@@ -70,7 +105,8 @@ export async function POST(request: NextRequest) {
       originalFilename: file.name,
       fileType,
       fileSize: file.size,
-      uploadedBy: "default-user",
+      uploadedBy: DEFAULT_USER_ID,
+      groupId,
     });
 
     return NextResponse.json({ document: doc }, { status: 201 });
@@ -102,4 +138,42 @@ export async function DELETE(request: NextRequest) {
   }
 
   return NextResponse.json({ success: true });
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+
+    if (body.action === "move-document") {
+      const documentId = body.documentId as string | undefined;
+      const groupId = body.groupId as string | undefined;
+
+      if (!documentId || !groupId) {
+        return NextResponse.json(
+          { error: "documentId and groupId are required" },
+          { status: 400 }
+        );
+      }
+
+      const document = moveDocumentToGroup(documentId, groupId);
+      if (!document) {
+        return NextResponse.json(
+          { error: "Document or target group not found" },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({ document });
+    }
+
+    return NextResponse.json(
+      { error: "Unsupported action" },
+      { status: 400 }
+    );
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 }
+    );
+  }
 }

@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { cookies } from "next/headers";
 import { getRequestConfig } from "next-intl/server";
 import {
@@ -13,8 +15,17 @@ export default getRequestConfig(async () => {
     ? requestedLocale
     : APP_LOCALES[0];
 
+  // Use fs.readFileSync to bypass Node.js module cache so the dev server
+  // always picks up the latest translations without a restart.
+  const messagesPath = path.join(
+    process.cwd(),
+    "src/messages",
+    `${locale}.json`
+  );
+  const messages = JSON.parse(fs.readFileSync(messagesPath, "utf-8"));
+
   return {
     locale,
-    messages: (await import(`../messages/${locale}.json`)).default,
+    messages,
   };
 });

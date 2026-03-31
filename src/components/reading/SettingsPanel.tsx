@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import React from "react";
+import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import type { FocusMode, ReadingTheme } from "@/types";
 
@@ -10,6 +11,9 @@ interface SettingsPanelProps {
   onOpen: () => void;
   onClose: () => void;
   hintMessage?: string;
+  owlTop?: React.CSSProperties["top"];
+  owlWidth?: number;
+  owlHeight?: number;
   focusMode: FocusMode;
   theme: ReadingTheme;
   letterHelperEnabled: boolean;
@@ -52,11 +56,18 @@ const THEME_BUBBLE_STYLES: Record<ReadingTheme, { container: string; tail: strin
   },
 };
 
+export const DEFAULT_READING_SETTINGS_OWL_TOP = "18.2%";
+export const DEFAULT_READING_SETTINGS_OWL_WIDTH = 60;
+export const DEFAULT_READING_SETTINGS_OWL_HEIGHT = 158;
+
 export function SettingsPanel({
   open,
   onOpen,
   onClose,
   hintMessage,
+  owlTop = DEFAULT_READING_SETTINGS_OWL_TOP,
+  owlWidth = DEFAULT_READING_SETTINGS_OWL_WIDTH,
+  owlHeight = DEFAULT_READING_SETTINGS_OWL_HEIGHT,
   focusMode,
   theme,
   letterHelperEnabled,
@@ -74,8 +85,15 @@ export function SettingsPanel({
   onTtsSpeedChange,
 }: SettingsPanelProps) {
   const t = useTranslations("reading");
+  const [mounted, setMounted] = React.useState(false);
   const [showHint, setShowHint] = React.useState(true);
   const themeBubble = THEME_BUBBLE_STYLES[theme];
+  const bubbleOffset = Math.max(16, Math.round(owlHeight * 0.16));
+  const owlVisibilityClass = open
+    ? "translate-x-[110%] opacity-0 pointer-events-none"
+    : showHint && hintMessage
+      ? "translate-x-0 opacity-100"
+      : "translate-x-[3px] opacity-100 hover:translate-x-0";
 
   const focusModes: { value: FocusMode; label: string; icon: string; desc: string }[] = [
     { value: "single-line", label: t("focusMode.singleLine"), icon: "🔦", desc: "One line at a time" },
@@ -89,65 +107,83 @@ export function SettingsPanel({
     { value: "magic-wand", label: t("themes.magicWand"), icon: "✨" },
   ];
 
-  return (
+  React.useEffect(() => {
+    setMounted(true);
+
+    return () => {
+      setMounted(false);
+    };
+  }, []);
+
+  const overlay = (
     <>
-      {/* Right-edge owl tab — visible only when panel is closed */}
-      {!open && (
-        <>
-          {/* Transparent dismiss layer — click anywhere outside bubble to dismiss greeting */}
-          {showHint && hintMessage && (
-            <div
-              className="fixed inset-0 z-[54]"
-              onClick={() => setShowHint(false)}
+      {/* Transparent dismiss layer — click anywhere outside bubble to dismiss greeting */}
+      {!open && showHint && hintMessage && (
+        <div
+          className="fixed inset-0 z-[79]"
+          onClick={() => setShowHint(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Owl launcher stays mounted and slides fully away while the settings menu is open */}
+      <div
+        className={`fixed right-0 z-[80] flex -translate-y-1/2 items-start transition-all duration-200 ease-in-out ${owlVisibilityClass}`}
+        style={{ top: owlTop }}
+        aria-hidden={open}
+      >
+        {!open && showHint && hintMessage && (
+          <div
+            className={`relative mr-3 mt-6 w-[220px] rounded-2xl border px-4 py-3 text-left text-sm font-medium leading-relaxed shadow-lg backdrop-blur-sm ${themeBubble.container}`}
+            style={{ marginTop: bubbleOffset }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {hintMessage}
+            <span
+              className={`absolute -right-[6px] top-4 h-3 w-3 rotate-45 border-r border-b ${themeBubble.tail}`}
               aria-hidden="true"
             />
-          )}
-
-          {/* Owl + bubble container: 3px off-screen by default, full on hover or while greeting is visible */}
-          <div
-            className={`fixed right-0 z-[55] -translate-y-full flex items-start transition-transform duration-200 ease-in-out ${
-              showHint && hintMessage ? "translate-x-0" : "translate-x-[3px] hover:translate-x-0"
-            }`}
-            style={{ top: "calc(33.333% + 10px)" }}
-          >
-            {/* Greeting bubble — shown on entry, click outside to dismiss */}
-            {showHint && hintMessage && (
-              <div
-                className={`relative mr-3 mt-6 w-[220px] rounded-2xl border px-4 py-3 text-left text-sm font-medium leading-relaxed shadow-lg backdrop-blur-sm ${themeBubble.container}`}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {hintMessage}
-                <span
-                  className={`absolute -right-[6px] top-4 h-3 w-3 rotate-45 border-r border-b ${themeBubble.tail}`}
-                  aria-hidden="true"
-                />
-              </div>
-            )}
-
-            {/* Owl button — click to open settings panel */}
-            <button
-              onClick={() => { setShowHint(false); onOpen(); }}
-              className="block"
-              aria-label="Open settings"
-              title="Open settings"
-            >
-              <Image
-                src="/images/owl-slidemenu.png"
-                alt=""
-                width={88}
-                height={149}
-                priority
-                className="block h-auto w-[88px] max-w-none drop-shadow-[0_6px_12px_rgba(0,0,0,0.14)]"
-              />
-            </button>
           </div>
-        </>
-      )}
+        )}
+
+        <button
+          onClick={() => {
+            setShowHint(false);
+            onOpen();
+          }}
+          className="group block"
+          aria-label="Open settings"
+          title="Open settings"
+          tabIndex={open ? -1 : 0}
+        >
+          <span
+            className="relative block"
+            style={{ width: owlWidth, height: owlHeight }}
+          >
+            <Image
+              src="/images/owl-slidemenu.png"
+              alt=""
+              fill
+              priority
+              sizes={`${owlWidth}px`}
+              className="block max-w-none object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.14)] opacity-100 transition-opacity duration-150 group-hover:opacity-0 group-focus-visible:opacity-0"
+            />
+            <Image
+              src="/images/owl-slidemenu_lit.png"
+              alt=""
+              fill
+              priority
+              sizes={`${owlWidth}px`}
+              className="block max-w-none object-contain drop-shadow-[0_8px_18px_rgba(255,210,114,0.38)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+            />
+          </span>
+        </button>
+      </div>
 
       {/* Backdrop */}
       {open && (
         <div
-          className="fixed inset-0 z-[60] bg-black/20"
+          className="fixed inset-0 z-[85] bg-black/20"
           onClick={onClose}
           aria-hidden="true"
         />
@@ -155,8 +191,8 @@ export function SettingsPanel({
 
       {/* Panel */}
       <div
-        className={`fixed top-0 right-0 z-[70] h-full w-[340px] max-w-[85vw] transform bg-white shadow-[-8px_0_40px_rgba(0,0,0,0.12)] transition-transform duration-300 ease-in-out ${
-          open ? "translate-x-0" : "translate-x-full"
+        className={`fixed top-0 right-0 z-[90] h-full w-[340px] max-w-[85vw] transform bg-white shadow-[-8px_0_40px_rgba(0,0,0,0.12)] transition-transform duration-300 ease-in-out ${
+          open ? "translate-x-0" : "translate-x-full pointer-events-none"
         }`}
         role="dialog"
         aria-modal={open}
@@ -324,6 +360,12 @@ export function SettingsPanel({
       </div>
     </>
   );
+
+  if (!mounted) {
+    return null;
+  }
+
+  return createPortal(overlay, document.body);
 }
 
 function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {

@@ -5,7 +5,11 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { useTranslations } from "next-intl";
-import { HOME_TITLE_THEME } from "./home-title-fonts";
+import {
+  APP_BACKGROUND_IMAGE_SRC,
+  APP_VIEWPORT_STYLE,
+  AppWordmark,
+} from "@/components/layout/AppBranding";
 
 type IslandKey =
   | "island"
@@ -145,44 +149,6 @@ const HOME_TITLE_STYLE: CSSProperties = {
   top: "0.6%",
 };
 
-/* ── Confusable-letter colors (same as the app's letter-confusion system) ── */
-const LETTER_D_COLOR = "#FF8C42";
-const LETTER_P_COLOR = "#9B8EC2";
-
-function styledTitle(
-  text: string,
-  baseColor: string,
-  shadow: string,
-  transformPattern: readonly string[],
-) {
-  return text.split("").map((ch, i) => {
-    const lower = ch.toLowerCase();
-    const isD = lower === "d";
-    const isP = lower === "p";
-    const color = isD
-      ? LETTER_D_COLOR
-      : isP
-        ? LETTER_P_COLOR
-        : baseColor;
-    return (
-      <span
-        key={i}
-        style={{
-          color,
-          display: "inline-block",
-          fontWeight: isD || isP ? 700 : undefined,
-          transform: ch === " " ? undefined : transformPattern[i % transformPattern.length],
-          textShadow: isD || isP
-            ? `0 0 8px ${isD ? LETTER_D_COLOR : LETTER_P_COLOR}44`
-            : shadow,
-        }}
-      >
-        {ch === " " ? "\u00A0" : ch}
-      </span>
-    );
-  });
-}
-
 const SETTINGS_ICON_STYLE: CSSProperties = {
   left: "1.0%",
   bottom: "1.0%",
@@ -258,14 +224,6 @@ const MENU_TEXT_COLORS = {
   },
 };
 
-const HOME_SCENE_WIDTH = 1380;
-const HOME_SCENE_HEIGHT = 752;
-
-const HOME_VIEWPORT_STYLE: CSSProperties = {
-  background:
-    "radial-gradient(circle at 50% 0%, rgba(72, 126, 194, 0.22), transparent 28%), linear-gradient(180deg, #1d3266 0%, #23477c 38%, #2c63a0 72%, #244c83 100%)",
-};
-
 export default function HomePage() {
   const map = useTranslations("map");
   const nav = useTranslations("nav");
@@ -282,10 +240,10 @@ export default function HomePage() {
   return (
     <div
       className="flex h-[100dvh] w-screen items-center justify-center overflow-hidden"
-      style={HOME_VIEWPORT_STYLE}
+      style={APP_VIEWPORT_STYLE}
     >
       <div
-        className="home-scene-frame relative overflow-hidden bg-[#244c83]"
+        className="app-scene-frame relative overflow-hidden bg-[#244c83]"
         onPointerMove={handlePointerMove}
         onPointerLeave={resetScene}
         onPointerCancel={resetScene}
@@ -294,7 +252,7 @@ export default function HomePage() {
 
           <div className="absolute inset-0">
             <Image
-              src="/images/reading_homepage_dark.png"
+              src={APP_BACKGROUND_IMAGE_SRC}
               alt={map("sceneLabel")}
               fill
               priority
@@ -310,21 +268,7 @@ export default function HomePage() {
             className="pointer-events-none absolute z-20"
             style={HOME_TITLE_STYLE}
           >
-            <span
-              className={`${HOME_TITLE_THEME.className} block drop-shadow-[0_1px_6px_rgba(0,0,0,0.18)]`}
-              style={{
-                fontSize: HOME_TITLE_THEME.fontSize,
-                lineHeight: HOME_TITLE_THEME.lineHeight,
-                letterSpacing: HOME_TITLE_THEME.letterSpacing,
-              }}
-            >
-              {styledTitle(
-                "ReadingStar Planet",
-                HOME_TITLE_THEME.baseColor,
-                HOME_TITLE_THEME.shadow,
-                HOME_TITLE_THEME.transformPattern,
-              )}
-            </span>
+            <AppWordmark className="block drop-shadow-[0_1px_6px_rgba(0,0,0,0.18)]" />
           </div>
 
           <Link
@@ -381,11 +325,6 @@ export default function HomePage() {
       </div>
 
       <style jsx global>{`
-        .home-scene-frame {
-          width: min(100vw, calc(100dvh * ${HOME_SCENE_WIDTH} / ${HOME_SCENE_HEIGHT}));
-          height: min(100dvh, calc(100vw * ${HOME_SCENE_HEIGHT} / ${HOME_SCENE_WIDTH}));
-        }
-
         @keyframes mapSparkle {
           0% { opacity: 0; transform: translateY(0) scale(0.4); }
           30% { opacity: 1; transform: translateY(-8px) scale(1); }

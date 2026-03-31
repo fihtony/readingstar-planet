@@ -1,5 +1,5 @@
 const SERVICE_WORKER_SOURCE = `
-const CACHE_NAME = "readingstar-shell-v3";
+const CACHE_NAME = "readingstar-shell-v4";
 const STATIC_EXTENSIONS = /\\.(js|css|woff2?|otf|ttf|png|jpg|jpeg|svg|ico|webp)$/;
 
 self.addEventListener("install", (event) => {

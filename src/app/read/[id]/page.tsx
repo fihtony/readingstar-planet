@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import React, {
   useState,
   useEffect,
@@ -25,6 +26,7 @@ const DEFAULT_USER_ID = "default-user";
 
 export default function ReadPage() {
   const mascot = useTranslations("mascot");
+  const nav = useTranslations("nav");
   const params = useParams();
   const documentId = params.id as string;
 
@@ -326,12 +328,21 @@ export default function ReadPage() {
   return (
     <div className="flex flex-col gap-4 pb-24">
       <BreakReminder active={!loading && !!document} />
-      <h1
-        className="text-xl font-bold"
-        style={{ color: "var(--color-warm-orange)" }}
-      >
-        📖 {document.title}
-      </h1>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Link
+          href="/library"
+          className="btn-kid inline-flex items-center rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-bold text-sky-700 transition-colors hover:bg-sky-100"
+        >
+          ← {nav("library")}
+        </Link>
+        <h1
+          className="min-w-0 flex-1 text-xl font-bold"
+          style={{ color: "var(--color-warm-orange)" }}
+        >
+          📖 {document.title}
+        </h1>
+      </div>
 
       <div
         className="p-6 rounded-2xl bg-white shadow-sm border border-gray-100 min-h-[400px]"

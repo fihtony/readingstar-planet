@@ -25,6 +25,17 @@ export interface Document {
   fileType: FileType;
   fileSize: number;
   uploadedBy: string;
+  groupId: string | null;
+  groupPosition: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentGroup {
+  id: string;
+  userId: string;
+  name: string;
+  position: number;
   createdAt: string;
   updatedAt: string;
 }

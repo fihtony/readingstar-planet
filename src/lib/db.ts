@@ -14,6 +14,7 @@ export function getDatabase(): Database.Database {
     db.pragma("foreign_keys = ON");
     initializeSchema(db);
     seedSampleDocuments(db);
+    initializeSchema(db);
   }
   return db;
 }
