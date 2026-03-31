@@ -1,12 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { DocumentUpload, type ImportParams } from "@/components/upload/DocumentUpload";
 import { MascotGuide } from "@/components/mascot/MascotGuide";
 import { Button } from "@/components/ui/Button";
+import { getRecommendedReadMinutes, getWordCount, markReadCounted } from "@/lib/read-count";
 import type { Document, DocumentGroup } from "@/types";
+
+type SortBy = "name" | "size" | "mostRead" | "latestUpdate";
+type SortDir = "asc" | "desc";
+
+const DEFAULT_SORT_DIR: Record<SortBy, SortDir> = {
+  name: "asc",
+  size: "asc",
+  mostRead: "desc",
+  latestUpdate: "desc",
+};
 
 export default function LibraryPage() {
   const t = useTranslations("library");
@@ -23,6 +35,25 @@ export default function LibraryPage() {
   const [draggingDocumentId, setDraggingDocumentId] = useState<string | null>(null);
   const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null);
   const [dropGroupId, setDropGroupId] = useState<string | null>(null);
+
+  // Group rename
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState("");
+
+  // Document editing
+  const [editingDoc, setEditingDoc] = useState<Document | null>(null);
+  const [editDocTitle, setEditDocTitle] = useState("");
+  const [editDocContent, setEditDocContent] = useState("");
+  const [editDocIcon, setEditDocIcon] = useState("");
+  const [isSavingDoc, setIsSavingDoc] = useState(false);
+
+  // Sorting
+  const [sortBy, setSortBy] = useState<SortBy>("mostRead");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // Delete confirmation
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [deletingDocTitle, setDeletingDocTitle] = useState("");
 
   useEffect(() => {
     fetchDocuments();
@@ -73,7 +104,15 @@ export default function LibraryPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const confirmDelete = (id: string, title: string) => {
+    setDeletingDocId(id);
+    setDeletingDocTitle(title);
+  };
+
+  const handleDelete = async () => {
+    if (!deletingDocId) return;
+    const id = deletingDocId;
+    setDeletingDocId(null);
     try {
       const res = await fetch(`/api/documents?id=${id}`, {
         method: "DELETE",
@@ -105,10 +144,89 @@ export default function LibraryPage() {
     }
   };
 
-  const handleDocumentDrop = async (targetGroupId: string) => {
-    if (!draggingDocumentId) {
-      return;
+  const handleRenameGroup = async (groupId: string) => {
+    const trimmed = editingGroupName.trim();
+    if (!trimmed) return;
+    const res = await fetch("/api/document-groups", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "rename", groupId, name: trimmed }),
+    });
+    if (res.ok) {
+      setEditingGroupId(null);
+      setEditingGroupName("");
+      await fetchDocuments();
     }
+  };
+
+  const openEditGroup = (group: DocumentGroup) => {
+    setEditingGroupId(group.id);
+    setEditingGroupName(group.name);
+  };
+
+  const handleUpdateDoc = async () => {
+    if (!editingDoc) return;
+    setIsSavingDoc(true);
+    try {
+      const res = await fetch("/api/documents", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-document",
+          documentId: editingDoc.id,
+          title: editDocTitle.trim(),
+          content: editDocContent,
+          icon: editDocIcon.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        setEditingDoc(null);
+        await fetchDocuments();
+      }
+    } finally {
+      setIsSavingDoc(false);
+    }
+  };
+
+  const openEditDoc = (doc: Document) => {
+    setEditingDoc(doc);
+    setEditDocTitle(doc.title);
+    setEditDocContent(doc.content);
+    setEditDocIcon(doc.icon ?? "");
+  };
+
+  const handleSortChange = (field: SortBy) => {
+    if (sortBy === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(field);
+      setSortDir(DEFAULT_SORT_DIR[field]);
+    }
+  };
+
+  const sortDocuments = (docs: Document[]): Document[] => {
+    return [...docs].sort((a, b) => {
+      let cmp = 0;
+      switch (sortBy) {
+        case "name":
+          cmp = a.title.localeCompare(b.title);
+          break;
+        case "size":
+          cmp = a.fileSize - b.fileSize;
+          break;
+        case "mostRead":
+          cmp = (a.readCount ?? 0) - (b.readCount ?? 0);
+          break;
+        case "latestUpdate":
+          cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  };
+
+  const handleDocumentDrop = async (targetGroupId: string) => {
+    if (!draggingDocumentId) return;
 
     const draggedDocument = documents.find((doc) => doc.id === draggingDocumentId);
     if (!draggedDocument || draggedDocument.groupId === targetGroupId) {
@@ -172,7 +290,7 @@ export default function LibraryPage() {
   const groupedDocuments = groups.length > 0
     ? groups.map((group) => ({
         group,
-        documents: filteredDocs.filter((doc) => doc.groupId === group.id),
+        documents: sortDocuments(filteredDocs.filter((doc) => doc.groupId === group.id)),
       }))
     : [
         {
@@ -184,9 +302,17 @@ export default function LibraryPage() {
             createdAt: "",
             updatedAt: "",
           },
-          documents: filteredDocs,
+          documents: sortDocuments(filteredDocs),
         },
       ];
+
+  const sortFields: SortBy[] = ["name", "size", "mostRead", "latestUpdate"];
+  const sortLabel: Record<SortBy, string> = {
+    name: t("sortName"),
+    size: t("sortSize"),
+    mostRead: t("sortMostRead"),
+    latestUpdate: t("sortLatest"),
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -244,15 +370,33 @@ export default function LibraryPage() {
       )}
 
       {documents.length > 0 && (
-        <input
-          type="text"
-          placeholder={`🔍 ${t("search")}`}
-          className="w-full max-w-sm px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-sky-300 focus:outline-none"
-          style={{ minHeight: "var(--min-touch-target)" }}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          aria-label={t("search")}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            placeholder={`🔍 ${t("search")}`}
+            className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-slate-700 shadow-sm focus:border-sky-300 focus:outline-none"
+            style={{ minHeight: "var(--min-touch-target)", width: "30rem", maxWidth: "100%" }}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label={t("search")}
+          />
+          <div className="flex items-center gap-1 ml-auto flex-wrap">
+            <span className="text-xs text-gray-400 mr-1">{t("sortBy")}:</span>
+            {sortFields.map((field) => (
+              <button
+                key={field}
+                onClick={() => handleSortChange(field)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                  sortBy === field
+                    ? "bg-sky-100 text-sky-700 border-sky-300"
+                    : "bg-gray-100 text-gray-500 hover:bg-gray-200 border-transparent"
+                }`}
+              >
+                {sortLabel[field]}{sortBy === field ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       <div className="flex flex-col gap-4">
@@ -302,13 +446,71 @@ export default function LibraryPage() {
                   setDraggingGroupId(null);
                   setDropGroupId(null);
                 }}
-                className={`flex items-center gap-3 ${group.id === "fallback-group" ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
+                className={`flex items-center gap-3 min-w-0 flex-1 ${group.id === "fallback-group" ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
                 aria-label={t("dragGroup")}
                 title={t("dragGroup")}
               >
-                <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500">⋮⋮</span>
-                <div>
-                  <h2 className="text-lg font-black text-slate-800">{group.name || t("untitledGroup")}</h2>
+                <span className="flex-shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500">⋮⋮</span>
+                <div className="min-w-0 flex-1">
+                  {editingGroupId === group.id ? (
+                    <div
+                      className="flex w-full items-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="text"
+                        className="min-w-0 rounded-lg border border-sky-300 px-2 py-1 text-base font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                        style={{
+                          width: `min(calc(100% - 9rem), max(14rem, ${Math.max(editingGroupName.length + 2, 10)}ch))`,
+                          maxWidth: "calc(100% - 9rem)",
+                        }}
+                        value={editingGroupName}
+                        onChange={(e) => setEditingGroupName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void handleRenameGroup(group.id);
+                          if (e.key === "Escape") {
+                            setEditingGroupId(null);
+                            setEditingGroupName("");
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <button
+                        className="flex-shrink-0 text-xs px-2 py-1 rounded-lg bg-sky-500 text-white hover:bg-sky-600"
+                        onClick={() => void handleRenameGroup(group.id)}
+                      >
+                        {t("saveButton")}
+                      </button>
+                      <button
+                        className="flex-shrink-0 text-xs px-2 py-1 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200"
+                        onClick={() => {
+                          setEditingGroupId(null);
+                          setEditingGroupName("");
+                        }}
+                      >
+                        {t("cancelButton")}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-black text-slate-800">
+                        {group.name || t("untitledGroup")}
+                      </h2>
+                      {group.id !== "fallback-group" && (
+                        <button
+                          className="text-gray-400 hover:text-sky-500 transition-colors p-1 rounded-lg text-sm"
+                          title={t("editGroupLabel")}
+                          aria-label={t("editGroupLabel")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditGroup(group);
+                          }}
+                        >
+                          ✏️
+                        </button>
+                      )}
+                    </div>
+                  )}
                   <p className="text-xs text-gray-400">{t("booksCount", { count: groupDocuments.length })}</p>
                 </div>
               </div>
@@ -326,7 +528,8 @@ export default function LibraryPage() {
                     key={doc.id}
                     document={doc}
                     dragging={draggingDocumentId === doc.id}
-                    onDelete={() => handleDelete(doc.id)}
+                    onDelete={() => confirmDelete(doc.id, doc.title)}
+                    onEdit={() => openEditDoc(doc)}
                     onDragStart={() => {
                       setDraggingDocumentId(doc.id);
                       setDraggingGroupId(null);
@@ -346,6 +549,110 @@ export default function LibraryPage() {
           </section>
         ))}
       </div>
+
+      {/* Delete confirmation dialog */}
+      {deletingDocId && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={() => setDeletingDocId(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <div className="text-4xl mb-3">🗑️</div>
+              <h2 className="text-lg font-black text-slate-800 mb-1">{t("deleteConfirm")}</h2>
+              <p className="text-sm text-gray-500 line-clamp-2">{deletingDocTitle}</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                className="flex-1 px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200"
+                onClick={() => setDeletingDocId(null)}
+              >
+                {t("cancelButton")}
+              </button>
+              <button
+                className="flex-1 px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-medium hover:bg-red-600"
+                onClick={() => void handleDelete()}
+              >
+                {t("menuDelete")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit document modal */}
+      {editingDoc && (
+        <div
+          className="fixed inset-0 z-50 flex justify-center p-0"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={() => setEditingDoc(null)}
+        >
+          <div
+            className="w-full max-w-lg bg-white shadow-2xl flex flex-col gap-4 overflow-y-auto mt-[60px] rounded-b-none rounded-t-3xl sm:rounded-3xl sm:mt-16 sm:max-h-[calc(100vh-5rem)] sm:self-start"
+            style={{ padding: "1.5rem" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-black text-slate-800">{t("editDocTitle")}</h2>
+              <button
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                onClick={() => setEditingDoc(null)}
+                aria-label={t("cancelButton")}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-semibold text-slate-600">{t("editDocTitleLabel")}</label>
+              <input
+                type="text"
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none"
+                value={editDocTitle}
+                onChange={(e) => setEditDocTitle(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-semibold text-slate-600">{t("editDocIconLabel")}</label>
+              <input
+                type="text"
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none"
+                value={editDocIcon}
+                onChange={(e) => setEditDocIcon(e.target.value)}
+                placeholder="📗 or https://..."
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-semibold text-slate-600">{t("editDocContentLabel")}</label>
+              <textarea
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none resize-y"
+                rows={10}
+                value={editDocContent}
+                onChange={(e) => setEditDocContent(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200"
+                onClick={() => setEditingDoc(null)}
+                disabled={isSavingDoc}
+              >
+                {t("cancelButton")}
+              </button>
+              <button
+                className="px-4 py-2 rounded-xl bg-sky-500 text-white text-sm font-medium hover:bg-sky-600 disabled:opacity-60"
+                onClick={() => void handleUpdateDoc()}
+                disabled={isSavingDoc || !editDocTitle.trim()}
+              >
+                {isSavingDoc ? t("savingButton") : t("saveButton")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -354,55 +661,146 @@ function DocumentCard({
   document: doc,
   dragging,
   onDelete,
+  onEdit,
   onDragStart,
   onDragEnd,
 }: {
   document: Document;
   dragging: boolean;
   onDelete: () => void;
+  onEdit: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
 }) {
   const t = useTranslations("library");
-  const sizeKB = Math.round(doc.fileSize / 1024);
+  const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isOpening, setIsOpening] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
+
+  const wordCount = getWordCount(doc.content);
+  const readMinutes = getRecommendedReadMinutes(doc.content);
+  const isImgUrl = doc.icon
+    ? doc.icon.startsWith("http://") || doc.icon.startsWith("https://")
+    : false;
+
+  const trackReadAndOpen = async () => {
+    if (isOpening) {
+      return;
+    }
+
+    setIsOpening(true);
+
+    try {
+      const response = await fetch("/api/documents", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "increment-read-count",
+          documentId: doc.id,
+        }),
+      });
+
+      if (response.ok) {
+        markReadCounted(doc.id);
+      }
+    } catch {
+      // Ignore tracking failures and continue to reading page.
+    } finally {
+      router.push(`/read/${doc.id}`);
+    }
+  };
 
   return (
     <div
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className={`p-5 rounded-2xl bg-white border-2 hover:border-sky-200 hover:shadow-md transition-all ${
+      className={`relative flex flex-col gap-3 p-4 rounded-2xl bg-white border-2 hover:border-sky-200 hover:shadow-md transition-all ${
         dragging ? "border-sky-300 opacity-70 shadow-md" : "border-gray-100"
       }`}
       data-document-card="true"
       data-document-title={doc.title}
     >
-      <div className="flex items-start justify-between mb-3">
-        <span className="text-3xl">
-          {doc.fileType === "pdf" ? "📕" : "📄"}
-        </span>
-        <span className="text-xs text-gray-400 uppercase">
-          {doc.fileType}
-        </span>
-      </div>
-      <h3 className="font-bold text-sm mb-1 line-clamp-2">{doc.title}</h3>
-      <p className="text-xs text-gray-400 mb-4">{sizeKB} KB</p>
-      <div className="flex gap-2">
-        <Link
-          href={`/read/${doc.id}`}
-          className="btn-kid flex-1 px-3 py-2 text-sm text-center text-white rounded-xl"
-          style={{ backgroundColor: "var(--color-sky-blue)" }}
-        >
-          📖 {t("readNow")}
-        </Link>
+      {/* Three-dot menu */}
+      <div ref={menuRef} className="absolute top-3 right-3 z-10">
         <button
-          className="btn-kid px-3 py-2 text-sm rounded-xl bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-400"
-          onClick={onDelete}
-          aria-label={`${t("delete")} ${doc.title}`}
+          className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors text-lg leading-none"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen((v) => !v);
+          }}
+          aria-label="Options"
         >
-          🗑
+          ⋮
         </button>
+        {menuOpen && (
+          <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[140px]">
+            <button
+              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-sky-50 flex items-center gap-2"
+              onClick={() => {
+                setMenuOpen(false);
+                onEdit();
+              }}
+            >
+              ✏️ {t("menuEdit")}
+            </button>
+            <button
+              className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2"
+              onClick={() => {
+                setMenuOpen(false);
+                onDelete();
+              }}
+            >
+              🗑️ {t("menuDelete")}
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Top row: icon + title (right-padded to avoid menu overlap) */}
+      <div className="flex gap-3 items-start pr-9">
+        <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 overflow-hidden text-2xl">
+          {isImgUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={doc.icon!} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <span>{doc.icon || (doc.fileType === "pdf" ? "📕" : "📄")}</span>
+          )}
+        </div>
+        <h3 className="font-bold text-sm leading-snug line-clamp-3 flex-1">{doc.title}</h3>
+      </div>
+
+      {/* Stats row */}
+      <div className="flex items-center gap-x-2 text-xs text-gray-400">
+        <span>{t("wordCount", { count: wordCount.toLocaleString() })}</span>
+        <span>•</span>
+        <span>{t("readingTime", { min: readMinutes })}</span>
+        <span className="ml-auto">{t("readCount", { count: doc.readCount ?? 0 })}</span>
+      </div>
+
+      {/* Read Now button */}
+      <button
+        type="button"
+        className="btn-kid mt-auto flex w-full items-center justify-center gap-2 rounded-xl py-3 text-base text-center text-white disabled:cursor-not-allowed disabled:opacity-70"
+        style={{ backgroundColor: "var(--color-sky-blue)" }}
+        onClick={() => void trackReadAndOpen()}
+        disabled={isOpening}
+      >
+        <span className="text-xl">📖</span>
+        <span className="font-bold">{t("readNow")}</span>
+      </button>
     </div>
   );
 }

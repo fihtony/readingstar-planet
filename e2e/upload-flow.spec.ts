@@ -4,6 +4,22 @@ function uniqueTitle(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
 
+async function createDocumentViaApi(
+  request: import("@playwright/test").APIRequestContext,
+  title: string,
+  content: string
+) {
+  const response = await request.post("/api/documents", {
+    data: {
+      title,
+      content,
+      groupId: null,
+    },
+  });
+
+  expect(response.ok()).toBeTruthy();
+}
+
 test.describe("Document Upload Flow", () => {
   test("shows error for unsupported file types", async ({ page }) => {
     await page.goto("/library");
@@ -43,29 +59,21 @@ test.describe("Document Upload Flow", () => {
     await expect(page.locator('div[role="status"]').first()).toBeVisible();
   });
 
-  test("can delete a document", async ({ page }) => {
-    const fileBase = uniqueTitle("delete-me");
-    const displayTitle = fileBase.replaceAll("-", " ");
+  test("can delete a document", async ({ page, request }) => {
+    const displayTitle = uniqueTitle("delete me").replaceAll("-", " ");
+
+    await createDocumentViaApi(request, displayTitle, "This will be deleted.");
 
     await page.goto("/library");
-    await page.click("text=Upload a Book");
-
-    // Upload a file first
-    const fileChooser = page.waitForEvent("filechooser");
-    await page.getByLabel(/upload|choose|file/i).click();
-    const chooser = await fileChooser;
-    await chooser.setFiles({
-      name: `${fileBase}.txt`,
-      mimeType: "text/plain",
-      buffer: Buffer.from("This will be deleted."),
-    });
 
     await expect(
       page.getByRole("heading", { name: displayTitle }).first()
     ).toBeVisible({ timeout: 10000 });
 
-    // Click delete
-    await page.getByLabel(new RegExp(`remove ${displayTitle}`, "i")).click();
+    const card = page.locator(`[data-document-title="${displayTitle}"]`).first();
+    await card.getByLabel(/options/i).click();
+    await page.getByRole("button", { name: /delete/i }).click();
+    await page.getByRole("button", { name: /^delete$/i }).click();
 
     // Document should be gone
     await expect(
@@ -73,34 +81,17 @@ test.describe("Document Upload Flow", () => {
     ).toHaveCount(0);
   });
 
-  test("can search documents", async ({ page }) => {
-    const alphaBase = uniqueTitle("alpha-book");
-    const betaBase = uniqueTitle("beta-book");
-    const alphaTitle = alphaBase.replaceAll("-", " ");
-    const betaTitle = betaBase.replaceAll("-", " ");
+  test("can search documents", async ({ page, request }) => {
+    const alphaTitle = uniqueTitle("alpha book").replaceAll("-", " ");
+    const betaTitle = uniqueTitle("beta book").replaceAll("-", " ");
+
+    await createDocumentViaApi(request, alphaTitle, `Content of ${alphaTitle}`);
+    await createDocumentViaApi(request, betaTitle, `Content of ${betaTitle}`);
 
     await page.goto("/library");
-    await page.click("text=Upload a Book");
+    await expect(page.getByRole("heading", { name: alphaTitle }).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole("heading", { name: betaTitle }).first()).toBeVisible({ timeout: 10000 });
 
-    // Upload two files
-    for (const name of [`${alphaBase}.txt`, `${betaBase}.txt`]) {
-      const fileChooser = page.waitForEvent("filechooser");
-      await page.getByLabel(/upload|choose|file/i).click();
-      const chooser = await fileChooser;
-      await chooser.setFiles({
-        name,
-        mimeType: "text/plain",
-        buffer: Buffer.from(`Content of ${name}`),
-      });
-      await expect(
-        page.getByRole("heading", {
-          name: name.replace(".txt", "").replaceAll("-", " "),
-        }).first()
-      ).toBeVisible({ timeout: 10000 });
-    }
-
-    // Close upload and search
-    await page.click("text=Close");
     await page.getByPlaceholder(/search/i).fill("alpha");
 
     // Only alpha should be visible

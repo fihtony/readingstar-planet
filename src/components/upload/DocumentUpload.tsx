@@ -326,14 +326,14 @@ export function DocumentUpload({
             placeholder={t("titlePlaceholder")}
             value={pasteTitle}
             onChange={(e) => setPasteTitle(e.target.value)}
-            className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm focus:border-sky-400 focus:outline-none"
+            className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-sky-400 focus:outline-none"
             aria-label={t("textTitle")}
           />
           <textarea
             placeholder={t("contentPlaceholder")}
             value={pasteContent}
             onChange={(e) => setPasteContent(e.target.value)}
-            className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-sm focus:border-sky-400 focus:outline-none resize-y"
+            className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-sky-400 focus:outline-none resize-y"
             rows={8}
             aria-label={t("contentLabel")}
           />
@@ -409,7 +409,7 @@ function PreviewStep({
           type="text"
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
-          className="rounded-xl border-2 border-sky-200 px-4 py-3 text-sm font-bold focus:border-sky-400 focus:outline-none"
+          className="rounded-xl border-2 border-sky-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm focus:border-sky-400 focus:outline-none"
           placeholder={t("titlePlaceholder")}
         />
       </div>
@@ -420,18 +420,26 @@ function PreviewStep({
           <label className="text-xs font-bold uppercase tracking-wide text-gray-500">
             {t("importGroup")}
           </label>
-          <select
-            value={groupId ?? ""}
-            onChange={(e) => onGroupChange(e.target.value || null)}
-            className="rounded-xl border-2 border-sky-200 px-4 py-3 text-sm focus:border-sky-400 focus:outline-none bg-white"
-          >
-            <option value="">{t("noGroup")}</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={groupId ?? ""}
+              onChange={(e) => onGroupChange(e.target.value || null)}
+              className="w-full appearance-none rounded-xl border-2 border-sky-200 bg-gray-100 py-3 pl-4 pr-16 text-sm focus:border-sky-400 focus:outline-none"
+            >
+              <option value="">{t("noGroup")}</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+            <span
+              className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-xl leading-none text-slate-500"
+              aria-hidden="true"
+            >
+              ▾
+            </span>
+          </div>
         </div>
       )}
 
@@ -452,7 +460,7 @@ function PreviewStep({
           <textarea
             value={content}
             onChange={(e) => onContentChange(e.target.value)}
-            className="w-full rounded-xl border-2 border-sky-200 px-4 py-3 text-sm focus:border-sky-400 focus:outline-none resize-y font-mono"
+            className="w-full rounded-xl border-2 border-sky-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-sky-400 focus:outline-none resize-y font-mono"
             rows={14}
             aria-label={t("contentLabel")}
           />

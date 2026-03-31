@@ -38,9 +38,11 @@ export function initializeSchema(db: Database.Database): void {
       original_filename TEXT NOT NULL,
       file_type TEXT NOT NULL CHECK (file_type IN ('pdf', 'txt')),
       file_size INTEGER NOT NULL,
+      read_count INTEGER NOT NULL DEFAULT 0,
       uploaded_by TEXT NOT NULL,
       group_id TEXT,
       group_position INTEGER NOT NULL DEFAULT 0,
+      icon TEXT,
       created_at DATETIME NOT NULL DEFAULT (datetime('now')),
       updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (group_id) REFERENCES document_groups(id) ON DELETE SET NULL,
@@ -125,6 +127,25 @@ function ensureDocumentGroupingSchema(db: Database.Database): void {
     db.prepare(
       "ALTER TABLE documents ADD COLUMN group_position INTEGER NOT NULL DEFAULT 0"
     ).run();
+  }
+
+  if (!hasColumn(db, "documents", "icon")) {
+    db.prepare("ALTER TABLE documents ADD COLUMN icon TEXT").run();
+  }
+
+  if (!hasColumn(db, "documents", "read_count")) {
+    db.prepare(
+      "ALTER TABLE documents ADD COLUMN read_count INTEGER NOT NULL DEFAULT 0"
+    ).run();
+
+    db.exec(`
+      UPDATE documents
+      SET read_count = (
+        SELECT COUNT(*)
+        FROM reading_sessions
+        WHERE reading_sessions.document_id = documents.id
+      )
+    `);
   }
 
   // Create the composite index now that both columns are guaranteed to exist.

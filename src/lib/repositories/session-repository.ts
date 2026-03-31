@@ -9,6 +9,7 @@ interface EndSessionOptions {
 }
 
 interface CreateSessionInput {
+  id?: string;
   userId: string;
   documentId: string;
   focusMode: FocusMode;
@@ -44,11 +45,11 @@ function rowToSession(row: SessionRow): ReadingSession {
 
 export function createSession(input: CreateSessionInput): ReadingSession {
   const db = getDatabase();
-  const id = uuidv4();
+  const id = input.id ?? uuidv4();
   const now = new Date().toISOString();
 
   db.prepare(
-    `INSERT INTO reading_sessions (id, user_id, document_id, started_at, focus_mode, letter_helper_enabled, tts_used)
+    `INSERT OR IGNORE INTO reading_sessions (id, user_id, document_id, started_at, focus_mode, letter_helper_enabled, tts_used)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
@@ -60,7 +61,11 @@ export function createSession(input: CreateSessionInput): ReadingSession {
     input.ttsUsed ? 1 : 0
   );
 
-  return {
+  const row = db
+    .prepare("SELECT * FROM reading_sessions WHERE id = ?")
+    .get(id) as SessionRow | undefined;
+
+  return row ? rowToSession(row) : {
     id,
     userId: input.userId,
     documentId: input.documentId,

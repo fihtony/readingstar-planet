@@ -11,6 +11,7 @@ import { initializeSchema } from "@/lib/schema";
 import {
   createDocument,
   getDocumentById,
+  incrementDocumentReadCount,
   listDocuments,
   searchDocuments,
   deleteDocument,
@@ -170,5 +171,22 @@ describe("document-repository", () => {
   it("returns null for non-existent document", () => {
     const doc = getDocumentById("no-such-id");
     expect(doc).toBeNull();
+  });
+
+  it("increments the explicit read count", () => {
+    const doc = createDocument({
+      title: "Count Me",
+      content: "hello there",
+      originalFilename: "count-me.txt",
+      fileType: "txt",
+      fileSize: 11,
+      uploadedBy: "user-1",
+    });
+
+    const updated = incrementDocumentReadCount(doc.id);
+
+    expect(updated).not.toBeNull();
+    expect(updated!.readCount).toBe(1);
+    expect(getDocumentById(doc.id)?.readCount).toBe(1);
   });
 });

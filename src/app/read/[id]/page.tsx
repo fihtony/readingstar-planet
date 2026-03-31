@@ -20,9 +20,15 @@ import { useReadingFocus } from "@/hooks/useReadingFocus";
 import { useTTS } from "@/hooks/useTTS";
 import { useLetterConfusion } from "@/hooks/useLetterConfusion";
 import { parseReadingContent, splitIntoWords } from "@/lib/text-processor";
+import {
+  getReadCountCooldownMsForContent,
+  markReadCounted,
+  shouldCountReadOnRefresh,
+} from "@/lib/read-count";
 import type { Document, FontFamily, ParsedDocument } from "@/types";
 
 const DEFAULT_USER_ID = "default-user";
+const SESSION_BOOTSTRAP_PREFIX = "reading-session-bootstrap:";
 
 export default function ReadPage() {
   const mascot = useTranslations("mascot");
@@ -42,6 +48,8 @@ export default function ReadPage() {
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [ttsPitch, setTtsPitch] = useState(1.05);
   const [ttsVoice, setTtsVoice] = useState("");
+  const [readCountCooldownMs, setReadCountCooldownMs] = useState<number | null>(null);
+  const sessionBootstrapIdRef = useRef<string | null>(null);
 
   const readingFocus = useReadingFocus({
     totalLines: document?.lines.length ?? 0,
@@ -94,6 +102,8 @@ export default function ReadPage() {
           const data = await docRes.json();
           const doc = data.document as Document;
           const parsedContent = parseReadingContent(doc.content);
+
+          setReadCountCooldownMs(getReadCountCooldownMsForContent(doc.content));
 
           setDocument({
             id: doc.id,
@@ -153,10 +163,19 @@ export default function ReadPage() {
 
     const startSession = async () => {
       try {
+        if (typeof window !== "undefined" && !sessionBootstrapIdRef.current) {
+          const storageKey = `${SESSION_BOOTSTRAP_PREFIX}${documentId}`;
+          const existing = window.sessionStorage.getItem(storageKey);
+          const bootstrapId = existing ?? crypto.randomUUID();
+          window.sessionStorage.setItem(storageKey, bootstrapId);
+          sessionBootstrapIdRef.current = bootstrapId;
+        }
+
         const response = await fetch("/api/reading-sessions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            sessionId: sessionBootstrapIdRef.current,
             userId: DEFAULT_USER_ID,
             documentId,
             focusMode: readingFocus.mode,
@@ -185,10 +204,46 @@ export default function ReadPage() {
     document,
     documentId,
     sessionId,
-    readingFocus.mode,
-    letterConfusion.config.enabled,
-    hasUsedTTS,
   ]);
+
+  useEffect(() => {
+    if (
+      !documentId ||
+      readCountCooldownMs === null ||
+      !shouldCountReadOnRefresh(documentId, readCountCooldownMs)
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const incrementReadCount = async () => {
+      try {
+        const response = await fetch("/api/documents", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "increment-read-count",
+            documentId,
+          }),
+        });
+
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        markReadCounted(documentId);
+      } catch {
+        // Ignore refresh read-count failures.
+      }
+    };
+
+    void incrementReadCount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [documentId, readCountCooldownMs]);
 
   useEffect(() => {
     if (!document) {
@@ -241,6 +296,10 @@ export default function ReadPage() {
         return;
       }
 
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem(`${SESSION_BOOTSTRAP_PREFIX}${documentId}`);
+      }
+
       const finalState = latestSessionState.current;
 
       void fetch("/api/reading-sessions", {
@@ -256,7 +315,7 @@ export default function ReadPage() {
         keepalive: true,
       });
     };
-  }, [sessionId]);
+  }, [documentId, sessionId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

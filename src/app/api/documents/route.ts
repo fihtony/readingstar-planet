@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createDocument, getDocumentById, listDocuments, searchDocuments, deleteDocument, moveDocumentToGroup } from "@/lib/repositories/document-repository";
+import { createDocument, getDocumentById, listDocuments, searchDocuments, deleteDocument, moveDocumentToGroup, updateDocument, incrementDocumentReadCount } from "@/lib/repositories/document-repository";
 import { ensureDefaultDocumentGroup, listDocumentGroups } from "@/lib/repositories/document-group-repository";
 import { validateFile, extractTextFromPDF, extractTextFromTXT, titleFromFilename } from "@/lib/pdf-parser";
 import { sanitizeTextContent } from "@/lib/text-processor";
@@ -159,6 +159,48 @@ export async function PATCH(request: NextRequest) {
       if (!document) {
         return NextResponse.json(
           { error: "Document or target group not found" },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({ document });
+    }
+
+    if (body.action === "update-document") {
+      const documentId = body.documentId as string | undefined;
+      const title = (body.title as string | undefined)?.trim();
+      const content = body.content as string | undefined;
+      const icon = body.icon !== undefined ? (body.icon as string | null) : undefined;
+
+      if (!documentId || !title) {
+        return NextResponse.json(
+          { error: "documentId and title are required" },
+          { status: 400 }
+        );
+      }
+
+      const sanitized = content ? sanitizeTextContent(content) : undefined;
+      const doc = updateDocument(documentId, { title, content: sanitized, icon });
+      if (!doc) {
+        return NextResponse.json({ error: "Document not found" }, { status: 404 });
+      }
+      return NextResponse.json({ document: doc });
+    }
+
+    if (body.action === "increment-read-count") {
+      const documentId = body.documentId as string | undefined;
+
+      if (!documentId) {
+        return NextResponse.json(
+          { error: "documentId is required" },
+          { status: 400 }
+        );
+      }
+
+      const document = incrementDocumentReadCount(documentId);
+      if (!document) {
+        return NextResponse.json(
+          { error: "Document not found" },
           { status: 404 }
         );
       }

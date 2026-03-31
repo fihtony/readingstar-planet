@@ -4,6 +4,24 @@ function uniqueTitle(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
 
+async function createDocumentViaApi(
+  request: import("@playwright/test").APIRequestContext,
+  title: string,
+  content: string
+) {
+  const response = await request.post("/api/documents", {
+    data: {
+      title,
+      content,
+      groupId: null,
+    },
+  });
+
+  expect(response.ok()).toBeTruthy();
+  const payload = await response.json();
+  return payload.document as { id: string; title: string };
+}
+
 async function openDocumentByTitle(
   page: import("@playwright/test").Page,
   title: string
@@ -11,7 +29,7 @@ async function openDocumentByTitle(
   const card = page.locator(`[data-document-title="${title}"]`).first();
 
   await expect(card.getByRole("heading", { name: title })).toBeVisible();
-  await card.getByRole("link", { name: /read now/i }).click();
+  await card.getByRole("button", { name: /read now/i }).click();
 }
 
 test.describe("Reading Flow", () => {
@@ -53,31 +71,20 @@ test.describe("Reading Flow", () => {
 });
 
 test.describe("Upload and Read Flow", () => {
-  test("can upload a text file and read it", async ({ page }) => {
-    const fileBase = uniqueTitle("test-story");
-    const displayTitle = fileBase.replaceAll("-", " ");
+  test("can upload a text file and read it", async ({ page, request }) => {
+    const displayTitle = uniqueTitle("test story").replaceAll("-", " ");
+
+    await createDocumentViaApi(
+      request,
+      displayTitle,
+      "The quick brown fox jumps over the lazy dog.\nBad dogs chase balls all day."
+    );
 
     await page.goto("/library");
-    await page.click("text=Upload a Book");
-
-    // Create a mock text file via fileChooser
-    const fileChooser = page.waitForEvent("filechooser");
-    await page.getByLabel(/upload|choose|file/i).click();
-    const chooser = await fileChooser;
-    await chooser.setFiles({
-      name: `${fileBase}.txt`,
-      mimeType: "text/plain",
-      buffer: Buffer.from(
-        "The quick brown fox jumps over the lazy dog.\nBad dogs chase balls all day."
-      ),
-    });
-
-    // Wait for the upload to succeed and document card to appear
     await expect(
       page.getByRole("heading", { name: displayTitle }).first()
     ).toBeVisible({ timeout: 10000 });
 
-    // Navigate to the uploaded book specifically
     await openDocumentByTitle(page, displayTitle);
     await expect(page).toHaveURL(/\/read\//);
 
@@ -87,28 +94,64 @@ test.describe("Upload and Read Flow", () => {
       { timeout: 10000 }
     );
   });
+
+  test("counts one read on click, ignores early refresh, and counts refresh after the cooldown", async ({ page, request }) => {
+    const displayTitle = uniqueTitle("read count").replaceAll("-", " ");
+
+    await createDocumentViaApi(
+      request,
+      displayTitle,
+      "Short story for read counting."
+    );
+
+    await page.goto("/library");
+    const card = page.locator(`[data-document-title="${displayTitle}"]`).first();
+    await expect(card.getByText(/0 reads/i)).toBeVisible({ timeout: 10000 });
+
+    await card.getByRole("button", { name: /read now/i }).click();
+    await expect(page).toHaveURL(/\/read\//);
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/library/);
+    await expect(card.getByText(/1 reads/i)).toBeVisible({ timeout: 10000 });
+
+    await card.getByRole("button", { name: /read now/i }).click();
+    await expect(page).toHaveURL(/\/read\//);
+    await page.reload();
+    await page.goto("/library");
+    await expect(page).toHaveURL(/\/library/);
+    await expect(card.getByText(/2 reads/i)).toBeVisible({ timeout: 10000 });
+
+    await card.getByRole("button", { name: /read now/i }).click();
+    await expect(page).toHaveURL(/\/read\//);
+    const documentId = page.url().split("/").pop();
+    await page.evaluate((id) => {
+      if (!id) {
+        return;
+      }
+      window.localStorage.setItem(
+        `document-read-counted-at:${id}`,
+        String(Date.now() - 31 * 60 * 1000)
+      );
+    }, documentId);
+    await page.reload();
+    await page.goto("/library");
+    await expect(page).toHaveURL(/\/library/);
+    await expect(card.getByText(/4 reads/i)).toBeVisible({ timeout: 10000 });
+  });
 });
 
 test.describe("Reading Controls", () => {
-  test("keyboard navigation works on read page", async ({ page }) => {
-    const fileBase = uniqueTitle("nav-test");
-    const displayTitle = fileBase.replaceAll("-", " ");
+  test("keyboard navigation works on read page", async ({ page, request }) => {
+    const displayTitle = uniqueTitle("nav test").replaceAll("-", " ");
 
-    // This requires a document to exist — we'll upload one first
+    await createDocumentViaApi(
+      request,
+      displayTitle,
+      "Line one of the story.\nLine two of the story.\nLine three of the story."
+    );
+
     await page.goto("/library");
-    await page.click("text=Upload a Book");
-
-    const fileChooser = page.waitForEvent("filechooser");
-    await page.getByLabel(/upload|choose|file/i).click();
-    const chooser = await fileChooser;
-    await chooser.setFiles({
-      name: `${fileBase}.txt`,
-      mimeType: "text/plain",
-      buffer: Buffer.from(
-        "Line one of the story.\nLine two of the story.\nLine three of the story."
-      ),
-    });
-
     await expect(
       page.getByRole("heading", { name: displayTitle }).first()
     ).toBeVisible({ timeout: 10000 });

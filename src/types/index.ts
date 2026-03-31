@@ -27,8 +27,10 @@ export interface Document {
   uploadedBy: string;
   groupId: string | null;
   groupPosition: number;
+  icon: string | null;
   createdAt: string;
   updatedAt: string;
+  readCount: number;
 }
 
 export interface DocumentGroup {

@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, documentId, focusMode, letterHelperEnabled, ttsUsed } = body;
+    const { sessionId, userId, documentId, focusMode, letterHelperEnabled, ttsUsed } = body;
 
     if (!userId || !documentId) {
       return NextResponse.json(
@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const session = createSession({
+      id: sessionId,
       userId,
       documentId,
       focusMode: focusMode || "single-line",

@@ -4,6 +4,7 @@ import {
   ensureDefaultDocumentGroup,
   listDocumentGroups,
   reorderDocumentGroups,
+  renameDocumentGroup,
 } from "@/lib/repositories/document-group-repository";
 
 const DEFAULT_USER_ID = "default-user";
@@ -44,6 +45,25 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
+
+    if (body.action === "rename") {
+      const groupId = body.groupId as string | undefined;
+      const name = (body.name as string | undefined)?.trim();
+
+      if (!groupId || !name) {
+        return NextResponse.json(
+          { error: "groupId and name are required" },
+          { status: 400 }
+        );
+      }
+
+      const group = renameDocumentGroup(groupId, name);
+      if (!group) {
+        return NextResponse.json({ error: "Group not found" }, { status: 404 });
+      }
+      return NextResponse.json({ group });
+    }
+
     const orderedGroupIds = body.orderedGroupIds as string[] | undefined;
 
     if (!Array.isArray(orderedGroupIds) || orderedGroupIds.length === 0) {

@@ -115,4 +115,32 @@ describe("session-repository", () => {
     const sessions = getSessionsByUser("no-user");
     expect(sessions).toEqual([]);
   });
+
+  it("reuses the same session row when the same bootstrap id is posted twice", () => {
+    const docId = (
+      testDb.prepare("SELECT id FROM documents LIMIT 1").get() as { id: string }
+    ).id;
+
+    createSession({
+      id: "session-bootstrap-1",
+      userId: "user-1",
+      documentId: docId,
+      focusMode: "single-line",
+      letterHelperEnabled: false,
+      ttsUsed: false,
+    });
+
+    createSession({
+      id: "session-bootstrap-1",
+      userId: "user-1",
+      documentId: docId,
+      focusMode: "single-line",
+      letterHelperEnabled: false,
+      ttsUsed: false,
+    });
+
+    const sessions = getSessionsByUser("user-1");
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].id).toBe("session-bootstrap-1");
+  });
 });

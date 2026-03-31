@@ -109,3 +109,18 @@ export function reorderDocumentGroups(
   transaction();
   return listDocumentGroups(userId);
 }
+
+export function renameDocumentGroup(
+  id: string,
+  name: string
+): DocumentGroup | null {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  const result = db
+    .prepare(
+      `UPDATE document_groups SET name = ?, updated_at = ? WHERE id = ?`
+    )
+    .run(name.trim(), now, id);
+  if (result.changes === 0) return null;
+  return getDocumentGroupById(id);
+}

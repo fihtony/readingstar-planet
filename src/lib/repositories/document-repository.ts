@@ -11,6 +11,7 @@ interface CreateDocumentInput {
   fileSize: number;
   uploadedBy: string;
   groupId?: string | null;
+  icon?: string | null;
 }
 
 interface DocumentRow {
@@ -20,9 +21,11 @@ interface DocumentRow {
   original_filename: string;
   file_type: FileType;
   file_size: number;
+  read_count: number;
   uploaded_by: string;
   group_id: string | null;
   group_position: number;
+  icon: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,8 +41,10 @@ function rowToDocument(row: DocumentRow): Document {
     uploadedBy: row.uploaded_by,
     groupId: row.group_id,
     groupPosition: row.group_position,
+    icon: row.icon,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    readCount: row.read_count,
   };
 }
 
@@ -65,8 +70,8 @@ export function createDocument(input: CreateDocumentInput): Document {
   const groupPosition = nextPositionRow.max_position + 1;
 
   db.prepare(
-    `INSERT INTO documents (id, title, content, original_filename, file_type, file_size, uploaded_by, group_id, group_position, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO documents (id, title, content, original_filename, file_type, file_size, read_count, uploaded_by, group_id, group_position, icon, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     input.title,
@@ -74,9 +79,11 @@ export function createDocument(input: CreateDocumentInput): Document {
     input.originalFilename,
     input.fileType,
     input.fileSize,
+    0,
     input.uploadedBy,
     targetGroupId,
     groupPosition,
+    input.icon ?? null,
     now,
     now
   );
@@ -91,8 +98,10 @@ export function createDocument(input: CreateDocumentInput): Document {
     uploadedBy: input.uploadedBy,
     groupId: targetGroupId,
     groupPosition,
+    icon: input.icon ?? null,
     createdAt: now,
     updatedAt: now,
+    readCount: 0,
   };
 }
 
@@ -130,6 +139,41 @@ export function searchDocuments(query: string): Document[] {
   return rows.map(rowToDocument);
 }
 
+export function updateDocument(
+  id: string,
+  input: { title?: string; content?: string; icon?: string | null }
+): Document | null {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+
+  const sets: string[] = [];
+  const values: unknown[] = [];
+
+  if (input.title !== undefined) {
+    sets.push("title = ?");
+    values.push(input.title);
+  }
+  if (input.content !== undefined) {
+    sets.push("content = ?");
+    values.push(input.content);
+    sets.push("file_size = ?");
+    values.push(Buffer.byteLength(input.content, "utf8"));
+  }
+  if (input.icon !== undefined) {
+    sets.push("icon = ?");
+    values.push(input.icon);
+  }
+
+  if (sets.length > 0) {
+    sets.push("updated_at = ?");
+    values.push(now);
+    values.push(id);
+    db.prepare(`UPDATE documents SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+  }
+
+  return getDocumentById(id);
+}
+
 export function moveDocumentToGroup(
   documentId: string,
   groupId: string
@@ -165,4 +209,19 @@ export function deleteDocument(id: string): boolean {
   const db = getDatabase();
   const result = db.prepare("DELETE FROM documents WHERE id = ?").run(id);
   return result.changes > 0;
+}
+
+export function incrementDocumentReadCount(id: string): Document | null {
+  const db = getDatabase();
+  const result = db.prepare(
+    `UPDATE documents
+     SET read_count = read_count + 1
+     WHERE id = ?`
+  ).run(id);
+
+  if (result.changes === 0) {
+    return null;
+  }
+
+  return getDocumentById(id);
 }
