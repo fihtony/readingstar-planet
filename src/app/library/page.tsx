@@ -8,9 +8,10 @@ import { DocumentUpload, type ImportParams } from "@/components/upload/DocumentU
 import { MascotGuide } from "@/components/mascot/MascotGuide";
 import { Button } from "@/components/ui/Button";
 import { getRecommendedReadMinutes, getWordCount, markReadCounted } from "@/lib/read-count";
-import type { Document, DocumentGroup } from "@/types";
+import { useAuth, useCsrfFetch } from "@/hooks/useAuth";
+import type { Document, DocumentGroup, UserReadingStats } from "@/types";
 
-type SortBy = "name" | "size" | "mostRead" | "latestUpdate";
+type SortBy = "name" | "size" | "mostRead" | "latestUpdate" | "myRead";
 type SortDir = "asc" | "desc";
 
 const DEFAULT_SORT_DIR: Record<SortBy, SortDir> = {
@@ -18,13 +19,17 @@ const DEFAULT_SORT_DIR: Record<SortBy, SortDir> = {
   size: "asc",
   mostRead: "desc",
   latestUpdate: "desc",
+  myRead: "desc",
 };
 
 export default function LibraryPage() {
   const t = useTranslations("library");
   const mascot = useTranslations("mascot");
+  const { isAdmin, isAuthenticated } = useAuth();
+  const csrfFetch = useCsrfFetch();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [groups, setGroups] = useState<DocumentGroup[]>([]);
+  const [userStats, setUserStats] = useState<Record<string, UserReadingStats>>({});
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -66,6 +71,13 @@ export default function LibraryPage() {
         const data = await res.json();
         setDocuments(data.documents);
         setGroups(data.groups ?? []);
+        if (data.userStats) {
+          const statsMap: Record<string, UserReadingStats> = {};
+          for (const [docId, stats] of Object.entries(data.userStats)) {
+            statsMap[docId] = stats as UserReadingStats;
+          }
+          setUserStats(statsMap);
+        }
       }
     } catch {
       // Silently handle — empty state is fine for first load
@@ -78,7 +90,7 @@ export default function LibraryPage() {
     setUploadSuccess(false);
 
     try {
-      const res = await fetch("/api/documents", {
+      const res = await csrfFetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, content, groupId }),
@@ -114,7 +126,7 @@ export default function LibraryPage() {
     const id = deletingDocId;
     setDeletingDocId(null);
     try {
-      const res = await fetch(`/api/documents?id=${id}`, {
+      const res = await csrfFetch(`/api/documents?id=${id}`, {
         method: "DELETE",
       });
       if (res.ok) {
@@ -131,7 +143,7 @@ export default function LibraryPage() {
       return;
     }
 
-    const res = await fetch("/api/document-groups", {
+    const res = await csrfFetch("/api/document-groups", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: trimmedName }),
@@ -147,7 +159,7 @@ export default function LibraryPage() {
   const handleRenameGroup = async (groupId: string) => {
     const trimmed = editingGroupName.trim();
     if (!trimmed) return;
-    const res = await fetch("/api/document-groups", {
+    const res = await csrfFetch("/api/document-groups", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "rename", groupId, name: trimmed }),
@@ -168,7 +180,7 @@ export default function LibraryPage() {
     if (!editingDoc) return;
     setIsSavingDoc(true);
     try {
-      const res = await fetch("/api/documents", {
+      const res = await csrfFetch("/api/documents", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -220,6 +232,21 @@ export default function LibraryPage() {
         case "latestUpdate":
           cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
           break;
+        case "myRead": {
+          const statsA = userStats[a.id];
+          const statsB = userStats[b.id];
+          cmp = (statsA?.readCount ?? 0) - (statsB?.readCount ?? 0);
+          if (cmp === 0) {
+            const timeA = statsA?.lastReadAt ? new Date(statsA.lastReadAt).getTime() : 0;
+            const timeB = statsB?.lastReadAt ? new Date(statsB.lastReadAt).getTime() : 0;
+            cmp = timeA - timeB;
+          }
+          if (cmp === 0) {
+            cmp = a.title.localeCompare(b.title);
+            return sortDir === "desc" ? -cmp : cmp; // title always asc as tiebreaker
+          }
+          break;
+        }
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
@@ -235,7 +262,7 @@ export default function LibraryPage() {
       return;
     }
 
-    const res = await fetch("/api/documents", {
+    const res = await csrfFetch("/api/documents", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -270,7 +297,7 @@ export default function LibraryPage() {
     setDraggingGroupId(null);
     setDropGroupId(null);
 
-    const res = await fetch("/api/document-groups", {
+    const res = await csrfFetch("/api/document-groups", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ orderedGroupIds }),
@@ -306,12 +333,15 @@ export default function LibraryPage() {
         },
       ];
 
-  const sortFields: SortBy[] = ["name", "size", "mostRead", "latestUpdate"];
+  const sortFields: SortBy[] = isAuthenticated
+    ? ["name", "size", "mostRead", "latestUpdate", "myRead"]
+    : ["name", "size", "mostRead", "latestUpdate"];
   const sortLabel: Record<SortBy, string> = {
     name: t("sortName"),
     size: t("sortSize"),
     mostRead: t("sortMostRead"),
     latestUpdate: t("sortLatest"),
+    myRead: "My Read",
   };
 
   return (
@@ -328,12 +358,16 @@ export default function LibraryPage() {
           <p className="mt-1 text-xs text-gray-400">{t("groupsHint")}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={() => setShowGroupForm((prev) => !prev)}>
-            {showGroupForm ? "✕" : "🗂️"} {t("addGroup")}
-          </Button>
-          <Button onClick={() => setShowUpload(!showUpload)}>
-            {showUpload ? "✕ Close" : `📖 ${t("upload")}`}
-          </Button>
+          {isAdmin && (
+            <Button variant="ghost" onClick={() => setShowGroupForm((prev) => !prev)}>
+              {showGroupForm ? "✕" : "🗂️"} {t("addGroup")}
+            </Button>
+          )}
+          {isAdmin && (
+            <Button onClick={() => setShowUpload(!showUpload)}>
+              {showUpload ? "✕ Close" : `📖 ${t("upload")}`}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -434,9 +468,9 @@ export default function LibraryPage() {
           >
             <div className="mb-4 flex items-center justify-between gap-3">
               <div
-                draggable={group.id !== "fallback-group"}
+                draggable={isAdmin && group.id !== "fallback-group"}
                 onDragStart={() => {
-                  if (group.id === "fallback-group") {
+                  if (!isAdmin || group.id === "fallback-group") {
                     return;
                   }
                   setDraggingGroupId(group.id);
@@ -446,11 +480,11 @@ export default function LibraryPage() {
                   setDraggingGroupId(null);
                   setDropGroupId(null);
                 }}
-                className={`flex items-center gap-3 min-w-0 flex-1 ${group.id === "fallback-group" ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
+                className={`flex items-center gap-3 min-w-0 flex-1 ${!isAdmin || group.id === "fallback-group" ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
                 aria-label={t("dragGroup")}
                 title={t("dragGroup")}
               >
-                <span className="flex-shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500">⋮⋮</span>
+                {isAdmin && <span className="flex-shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500">⋮⋮</span>}
                 <div className="min-w-0 flex-1">
                   {editingGroupId === group.id ? (
                     <div
@@ -496,7 +530,7 @@ export default function LibraryPage() {
                       <h2 className="text-lg font-black text-slate-800">
                         {group.name || t("untitledGroup")}
                       </h2>
-                      {group.id !== "fallback-group" && (
+                      {isAdmin && group.id !== "fallback-group" && (
                         <button
                           className="text-gray-400 hover:text-sky-500 transition-colors p-1 rounded-lg text-sm"
                           title={t("editGroupLabel")}
@@ -528,9 +562,13 @@ export default function LibraryPage() {
                     key={doc.id}
                     document={doc}
                     dragging={draggingDocumentId === doc.id}
+                    isAdmin={isAdmin}
+                    isAuthenticated={isAuthenticated}
+                    personalStats={userStats[doc.id] ?? null}
                     onDelete={() => confirmDelete(doc.id, doc.title)}
                     onEdit={() => openEditDoc(doc)}
                     onDragStart={() => {
+                      if (!isAdmin) return;
                       setDraggingDocumentId(doc.id);
                       setDraggingGroupId(null);
                     }}
@@ -660,6 +698,9 @@ export default function LibraryPage() {
 function DocumentCard({
   document: doc,
   dragging,
+  isAdmin,
+  isAuthenticated,
+  personalStats,
   onDelete,
   onEdit,
   onDragStart,
@@ -667,6 +708,9 @@ function DocumentCard({
 }: {
   document: Document;
   dragging: boolean;
+  isAdmin: boolean;
+  isAuthenticated: boolean;
+  personalStats: UserReadingStats | null;
   onDelete: () => void;
   onEdit: () => void;
   onDragStart: () => void;
@@ -724,7 +768,7 @@ function DocumentCard({
 
   return (
     <div
-      draggable
+      draggable={isAdmin}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       className={`relative flex flex-col gap-3 p-4 rounded-2xl bg-white border-2 hover:border-sky-200 hover:shadow-md transition-all ${
@@ -733,7 +777,8 @@ function DocumentCard({
       data-document-card="true"
       data-document-title={doc.title}
     >
-      {/* Three-dot menu */}
+      {/* Three-dot menu (admin only) */}
+      {isAdmin && (
       <div ref={menuRef} className="absolute top-3 right-3 z-10">
         <button
           className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors text-lg leading-none"
@@ -768,6 +813,7 @@ function DocumentCard({
           </div>
         )}
       </div>
+      )}
 
       {/* Top row: icon + title (right-padded to avoid menu overlap) */}
       <div className="flex gap-3 items-start pr-9">
@@ -789,6 +835,21 @@ function DocumentCard({
         <span>{t("readingTime", { min: readMinutes })}</span>
         <span className="ml-auto">{t("readCount", { count: doc.readCount ?? 0 })}</span>
       </div>
+
+      {/* Personal stats row (authenticated users only) */}
+      {isAuthenticated && (
+        <div className="flex items-center justify-between text-xs text-gray-400 -mt-1">
+          <span>
+            ⏱{" "}
+            {personalStats && personalStats.timedSessionCount > 0
+              ? `${Math.round(personalStats.totalTimeSec / personalStats.timedSessionCount / 60)} min avg`
+              : "-"}
+          </span>
+          <span>
+            📖 My reads: {personalStats?.readCount ?? 0}
+          </span>
+        </div>
+      )}
 
       {/* Read Now button */}
       <button

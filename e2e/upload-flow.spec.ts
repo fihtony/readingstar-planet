@@ -1,37 +1,11 @@
 import { test, expect } from "@playwright/test";
-
-function uniqueTitle(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-}
-
-async function resetDocuments(
-  request: import("@playwright/test").APIRequestContext
-) {
-  const response = await request.get("/api/documents");
-  expect(response.ok()).toBeTruthy();
-
-  const payload = await response.json();
-  for (const document of payload.documents as Array<{ id: string }>) {
-    const deleteResponse = await request.delete(`/api/documents?id=${document.id}`);
-    expect(deleteResponse.ok()).toBeTruthy();
-  }
-}
-
-async function createDocumentViaApi(
-  request: import("@playwright/test").APIRequestContext,
-  title: string,
-  content: string
-) {
-  const response = await request.post("/api/documents", {
-    data: {
-      title,
-      content,
-      groupId: null,
-    },
-  });
-
-  expect(response.ok()).toBeTruthy();
-}
+import {
+  createDocumentViaApi,
+  createGroupViaApi,
+  loginPageAsAdmin,
+  resetDocuments,
+  uniqueTitle,
+} from "./helpers/auth";
 
 test.describe("Document Upload Flow", () => {
   test.beforeEach(async ({ request }) => {
@@ -39,6 +13,7 @@ test.describe("Document Upload Flow", () => {
   });
 
   test("file picker restricts accepted file types", async ({ page }) => {
+    await loginPageAsAdmin(page, { email: "upload-flow-admin@example.com" });
     await page.goto("/library");
     await page.getByRole("button", { name: /upload a book/i }).click();
 
@@ -61,11 +36,9 @@ test.describe("Document Upload Flow", () => {
     const groupName = uniqueTitle("science club").replaceAll("-", " ");
     const finalTitle = uniqueTitle("matter notes").replaceAll("-", " ");
 
-    const groupResponse = await request.post("/api/document-groups", {
-      data: { name: groupName },
-    });
-    expect(groupResponse.ok()).toBeTruthy();
+    await createGroupViaApi(request, groupName);
 
+    await loginPageAsAdmin(page, { email: "upload-flow-admin@example.com" });
     await page.goto("/library");
     await page.getByRole("button", { name: /upload a book/i }).click();
     await page.getByRole("button", { name: /paste text/i }).click();
@@ -92,6 +65,7 @@ test.describe("Document Upload Flow", () => {
     const fileBase = uniqueTitle("preview file");
     const displayTitle = fileBase.replaceAll("-", " ");
 
+    await loginPageAsAdmin(page, { email: "upload-flow-admin@example.com" });
     await page.goto("/library");
     await page.getByRole("button", { name: /upload a book/i }).click();
 
@@ -117,6 +91,7 @@ test.describe("Document Upload Flow", () => {
 
     await createDocumentViaApi(request, displayTitle, "This will be deleted.");
 
+    await loginPageAsAdmin(page, { email: "upload-flow-admin@example.com" });
     await page.goto("/library");
 
     await expect(
@@ -141,6 +116,7 @@ test.describe("Document Upload Flow", () => {
     await createDocumentViaApi(request, alphaTitle, `Content of ${alphaTitle}`);
     await createDocumentViaApi(request, betaTitle, `Content of ${betaTitle}`);
 
+    await loginPageAsAdmin(page, { email: "upload-flow-admin@example.com" });
     await page.goto("/library");
     await expect(page.getByRole("heading", { name: alphaTitle }).first()).toBeVisible({ timeout: 10000 });
     await expect(page.getByRole("heading", { name: betaTitle }).first()).toBeVisible({ timeout: 10000 });

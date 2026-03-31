@@ -1,5 +1,5 @@
 import { getDatabase } from "../db";
-import type { FontFamily, ReadingTheme, UserSettings } from "@/types";
+import type { FontFamily, Locale, ReadingTheme, UserSettings } from "@/types";
 
 type SettingsUpdate = Partial<
   Pick<
@@ -13,6 +13,7 @@ type SettingsUpdate = Partial<
     | "ttsVoice"
     | "dailyTimeLimit"
     | "theme"
+    | "locale"
   >
 >;
 
@@ -27,6 +28,7 @@ interface SettingsRow {
   tts_voice: string;
   daily_time_limit: number;
   theme: ReadingTheme;
+  locale: Locale;
   updated_at: string;
 }
 
@@ -42,6 +44,7 @@ function rowToSettings(row: SettingsRow): UserSettings {
     ttsVoice: row.tts_voice ?? "",
     dailyTimeLimit: row.daily_time_limit,
     theme: row.theme,
+    locale: row.locale ?? "en",
     updatedAt: row.updated_at,
   };
 }
@@ -56,6 +59,23 @@ export function getOrCreateUserSettings(userId: string): UserSettings {
     return rowToSettings(existing);
   }
 
+  // Read global defaults from app_metadata so the new user inherits whatever
+  // the admin has configured, rather than hardcoded fallback values.
+  function getMeta(key: string, fallback: string): string {
+    const row = db
+      .prepare("SELECT value FROM app_metadata WHERE key = ?")
+      .get(key) as { value: string } | undefined;
+    return row?.value ?? fallback;
+  }
+
+  const fontFamily = getMeta("default_font_family", "opendyslexic") as FontFamily;
+  const fontSize = parseInt(getMeta("default_font_size", "20"), 10);
+  const lineSpacing = parseFloat(getMeta("default_line_spacing", "1.8"));
+  const maskOpacity = parseFloat(getMeta("default_mask_opacity", "0.7"));
+  const ttsSpeed = parseFloat(getMeta("default_tts_speed", "0.8"));
+  const ttsPitch = parseFloat(getMeta("default_tts_pitch", "1.05"));
+  const theme = getMeta("default_theme", "flashlight") as ReadingTheme;
+
   const now = new Date().toISOString();
   db.prepare(
     `INSERT INTO user_settings (
@@ -69,21 +89,23 @@ export function getOrCreateUserSettings(userId: string): UserSettings {
       tts_voice,
       daily_time_limit,
       theme,
+      locale,
       updated_at
-    ) VALUES (?, 'opendyslexic', 20, 1.8, 0.7, 0.8, 1.05, '', 30, 'flashlight', ?)`
-  ).run(userId, now);
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, '', 30, ?, 'en', ?)`
+  ).run(userId, fontFamily, fontSize, lineSpacing, maskOpacity, ttsSpeed, ttsPitch, theme, now);
 
   return {
     userId,
-    fontFamily: "opendyslexic",
-    fontSize: 20,
-    lineSpacing: 1.8,
-    maskOpacity: 0.7,
-    ttsSpeed: 0.8,
-    ttsPitch: 1.05,
+    fontFamily,
+    fontSize,
+    lineSpacing,
+    maskOpacity,
+    ttsSpeed,
+    ttsPitch,
     ttsVoice: "",
     dailyTimeLimit: 30,
-    theme: "flashlight",
+    theme,
+    locale: "en",
     updatedAt: now,
   };
 }
@@ -111,6 +133,7 @@ export function updateUserSettings(
          tts_voice = ?,
          daily_time_limit = ?,
          theme = ?,
+         locale = ?,
          updated_at = ?
      WHERE user_id = ?`
   ).run(
@@ -123,6 +146,7 @@ export function updateUserSettings(
     next.ttsVoice,
     next.dailyTimeLimit,
     next.theme,
+    next.locale,
     next.updatedAt,
     userId
   );

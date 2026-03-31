@@ -139,6 +139,14 @@ export function seedSampleDocuments(db: Database.Database): number {
   }
 
   const now = new Date().toISOString();
+
+  // Ensure the system/default user exists (required for FK constraint on uploaded_by).
+  // This is a legacy system account; it cannot log in with Google OAuth.
+  db.prepare(
+    `INSERT OR IGNORE INTO users (id, email, name, nickname, role, status, created_at, updated_at)
+     VALUES ('default-user', 'default@readingstar.local', 'System', 'System', 'admin', 'active', ?, ?)`
+  ).run(now, now);
+
   const insertDocument = db.prepare(
     `INSERT OR IGNORE INTO documents (
       id,

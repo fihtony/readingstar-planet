@@ -14,6 +14,11 @@ describe("sample-documents", () => {
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
     initializeSchema(db);
+
+    // Seed user for FK constraint (sample docs use 'default-user')
+    db.prepare(
+      `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`
+    ).run("default-user", "default@example.com", "Default", "user");
   });
 
   afterEach(() => {

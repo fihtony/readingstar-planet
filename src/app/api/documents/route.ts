@@ -3,10 +3,12 @@ import { createDocument, getDocumentById, listDocuments, searchDocuments, delete
 import { ensureDefaultDocumentGroup, listDocumentGroups } from "@/lib/repositories/document-group-repository";
 import { validateFile, extractTextFromPDF, extractTextFromTXT, titleFromFilename } from "@/lib/pdf-parser";
 import { sanitizeTextContent } from "@/lib/text-processor";
-
-const DEFAULT_USER_ID = "default-user";
+import { checkPermission, getClientIp } from "@/lib/permissions";
+import { getAuthContext, logAdminAudit, logUserActivity } from "@/lib/auth";
+import { recordUserRead, getUserStatsMap } from "@/lib/repositories/reading-stats-repository";
 
 export async function GET(request: NextRequest) {
+  const { authContext } = await checkPermission(request, "public");
   const id = request.nextUrl.searchParams.get("id");
 
   if (id) {
@@ -17,14 +19,45 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ document });
   }
 
+  const sort = request.nextUrl.searchParams.get("sort");
+
+  // my-read sort requires authentication
+  if (sort === "my-read") {
+    if (!authContext.user) {
+      return NextResponse.json(
+        { error: "Authentication required for personal sort" },
+        { status: 401 }
+      );
+    }
+  }
+
   const search = request.nextUrl.searchParams.get("search");
-  ensureDefaultDocumentGroup(DEFAULT_USER_ID);
   const documents = search ? searchDocuments(search) : listDocuments();
-  const groups = listDocumentGroups(DEFAULT_USER_ID);
-  return NextResponse.json({ documents, groups });
+  const groups = listDocumentGroups();
+
+  // Attach user reading stats if authenticated
+  let userStats: Record<string, { readCount: number; avgTimeSec: number | null }> | undefined;
+  if (authContext.user) {
+    const statsMap = getUserStatsMap(authContext.user.id);
+    userStats = {};
+    for (const [docId, stat] of statsMap) {
+      userStats[docId] = {
+        readCount: stat.readCount,
+        avgTimeSec: stat.timedSessionCount > 0
+          ? Math.round(stat.totalTimeSec / stat.timedSessionCount)
+          : null,
+      };
+    }
+  }
+
+  return NextResponse.json({ documents, groups, userStats });
 }
 
 export async function POST(request: NextRequest) {
+  // Admin only
+  const { authorized, response: permResponse, authContext: postAuth } = await checkPermission(request, "admin");
+  if (!authorized) return permResponse;
+
   try {
     const contentType = request.headers.get("content-type") ?? "";
 
@@ -49,9 +82,17 @@ export async function POST(request: NextRequest) {
         originalFilename: `${title}.txt`,
         fileType: "txt",
         fileSize: Buffer.byteLength(sanitized, "utf8"),
-        uploadedBy: DEFAULT_USER_ID,
+        uploadedBy: postAuth.user!.id,
         groupId,
       });
+
+      logAdminAudit(
+        postAuth.user!.id,
+        "document_uploaded",
+        "document",
+        doc.id,
+        JSON.stringify({ title: doc.title, method: "json" })
+      );
 
       return NextResponse.json({ document: doc }, { status: 201 });
     }
@@ -105,9 +146,17 @@ export async function POST(request: NextRequest) {
       originalFilename: file.name,
       fileType,
       fileSize: file.size,
-      uploadedBy: DEFAULT_USER_ID,
+      uploadedBy: postAuth.user!.id,
       groupId,
     });
+
+    logAdminAudit(
+      postAuth.user!.id,
+      "document_uploaded",
+      "document",
+      doc.id,
+      JSON.stringify({ title: doc.title, filename: file.name, method: "file" })
+    );
 
     return NextResponse.json({ document: doc }, { status: 201 });
   } catch (error) {
@@ -120,12 +169,23 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const { authorized, response: permResponse, authContext: delAuth } = await checkPermission(request, "admin");
+  if (!authorized) return permResponse;
+
   const id = request.nextUrl.searchParams.get("id");
 
   if (!id) {
     return NextResponse.json(
       { error: "Document id is required" },
       { status: 400 }
+    );
+  }
+
+  const doc = getDocumentById(id);
+  if (!doc) {
+    return NextResponse.json(
+      { error: "Document not found" },
+      { status: 404 }
     );
   }
 
@@ -137,12 +197,61 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
+  logAdminAudit(
+    delAuth.user!.id,
+    "document_deleted",
+    "document",
+    id,
+    JSON.stringify({ title: doc.title })
+  );
+
   return NextResponse.json({ success: true });
 }
 
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
+
+    if (body.action === "increment-read-count") {
+      // increment-read-count is public (anyone can read)
+      const { authContext: readAuth } = await checkPermission(request, "public");
+      const documentId = body.documentId as string | undefined;
+
+      if (!documentId) {
+        return NextResponse.json(
+          { error: "documentId is required" },
+          { status: 400 }
+        );
+      }
+
+      // If authenticated, record per-user stats and the global count is also incremented
+      if (readAuth.user) {
+        const stats = recordUserRead(readAuth.user.id, documentId);
+        const document = getDocumentById(documentId);
+        if (!document) {
+          return NextResponse.json(
+            { error: "Document not found" },
+            { status: 404 }
+          );
+        }
+        return NextResponse.json({ document, userStats: stats });
+      }
+
+      // Guest: only increment global count
+      const document = incrementDocumentReadCount(documentId);
+      if (!document) {
+        return NextResponse.json(
+          { error: "Document not found" },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({ document });
+    }
+
+    // All other PATCH actions require admin
+    const { authorized, response: permResponse, authContext: patchAuth } = await checkPermission(request, "admin");
+    if (!authorized) return permResponse;
 
     if (body.action === "move-document") {
       const documentId = body.documentId as string | undefined;
@@ -162,6 +271,14 @@ export async function PATCH(request: NextRequest) {
           { status: 404 }
         );
       }
+
+      logAdminAudit(
+        patchAuth.user!.id,
+        "document_edited",
+        "document",
+        documentId,
+        JSON.stringify({ action: "move-document", groupId })
+      );
 
       return NextResponse.json({ document });
     }
@@ -184,28 +301,16 @@ export async function PATCH(request: NextRequest) {
       if (!doc) {
         return NextResponse.json({ error: "Document not found" }, { status: 404 });
       }
+
+      logAdminAudit(
+        patchAuth.user!.id,
+        "document_edited",
+        "document",
+        documentId,
+        JSON.stringify({ action: "update-document", title })
+      );
+
       return NextResponse.json({ document: doc });
-    }
-
-    if (body.action === "increment-read-count") {
-      const documentId = body.documentId as string | undefined;
-
-      if (!documentId) {
-        return NextResponse.json(
-          { error: "documentId is required" },
-          { status: 400 }
-        );
-      }
-
-      const document = incrementDocumentReadCount(documentId);
-      if (!document) {
-        return NextResponse.json(
-          { error: "Document not found" },
-          { status: 404 }
-        );
-      }
-
-      return NextResponse.json({ document });
     }
 
     return NextResponse.json(

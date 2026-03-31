@@ -1,22 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   createDocumentGroup,
+  deleteDocumentGroup,
   ensureDefaultDocumentGroup,
   listDocumentGroups,
   reorderDocumentGroups,
   renameDocumentGroup,
 } from "@/lib/repositories/document-group-repository";
-
-const DEFAULT_USER_ID = "default-user";
+import { checkPermission } from "@/lib/permissions";
+import { logAdminAudit } from "@/lib/auth";
 
 export async function GET() {
-  ensureDefaultDocumentGroup(DEFAULT_USER_ID);
   return NextResponse.json({
-    groups: listDocumentGroups(DEFAULT_USER_ID),
+    groups: listDocumentGroups(),
   });
 }
 
 export async function POST(request: NextRequest) {
+  const { authorized, response: permResponse, authContext } = await checkPermission(request, "admin");
+  if (!authorized) return permResponse;
+
   try {
     const body = await request.json();
     const name = (body.name as string | undefined)?.trim();
@@ -29,9 +32,17 @@ export async function POST(request: NextRequest) {
     }
 
     const group = createDocumentGroup({
-      userId: DEFAULT_USER_ID,
+      userId: authContext.user!.id,
       name,
     });
+
+    logAdminAudit(
+      authContext.user!.id,
+      "group_created",
+      "group",
+      group.id,
+      JSON.stringify({ name: group.name })
+    );
 
     return NextResponse.json({ group }, { status: 201 });
   } catch {
@@ -43,6 +54,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  const { authorized, response: permResponse, authContext } = await checkPermission(request, "admin");
+  if (!authorized) return permResponse;
+
   try {
     const body = await request.json();
 
@@ -61,6 +75,15 @@ export async function PATCH(request: NextRequest) {
       if (!group) {
         return NextResponse.json({ error: "Group not found" }, { status: 404 });
       }
+
+      logAdminAudit(
+        authContext.user!.id,
+        "group_edited",
+        "group",
+        groupId,
+        JSON.stringify({ action: "rename", name })
+      );
+
       return NextResponse.json({ group });
     }
 
@@ -73,7 +96,16 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const groups = reorderDocumentGroups(DEFAULT_USER_ID, orderedGroupIds);
+    const groups = reorderDocumentGroups(orderedGroupIds);
+
+    logAdminAudit(
+      authContext.user!.id,
+      "group_edited",
+      "group",
+      null,
+      JSON.stringify({ action: "reorder", orderedGroupIds })
+    );
+
     return NextResponse.json({ groups });
   } catch {
     return NextResponse.json(
@@ -81,4 +113,36 @@ export async function PATCH(request: NextRequest) {
       { status: 400 }
     );
   }
+}
+
+export async function DELETE(request: NextRequest) {
+  const { authorized, response: permResponse, authContext } = await checkPermission(request, "admin");
+  if (!authorized) return permResponse;
+
+  const id = request.nextUrl.searchParams.get("id");
+
+  if (!id) {
+    return NextResponse.json(
+      { error: "Group id is required" },
+      { status: 400 }
+    );
+  }
+
+  const success = deleteDocumentGroup(id);
+  if (!success) {
+    return NextResponse.json(
+      { error: "Group not found" },
+      { status: 404 }
+    );
+  }
+
+  logAdminAudit(
+    authContext.user!.id,
+    "group_deleted",
+    "group",
+    id,
+    ""
+  );
+
+  return NextResponse.json({ success: true });
 }

@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { AppShell } from "@/components/layout/AppShell";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
+import { AuthProvider } from "@/hooks/useAuth";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -31,13 +32,15 @@ export default async function RootLayout({
           crossOrigin="anonymous"
         />
       </head>
-      <body className="min-h-screen bg-[#FFF9F0]">
+      <body className="min-h-screen bg-[#FFF9F0]" suppressHydrationWarning>
         <NextIntlClientProvider messages={messages}>
-          <ServiceWorkerRegister />
-          <a href="#main-content" className="skip-link">
-            Skip to main content
-          </a>
-          <AppShell>{children}</AppShell>
+          <AuthProvider>
+            <ServiceWorkerRegister />
+            <a href="#main-content" className="skip-link">
+              Skip to main content
+            </a>
+            <AppShell>{children}</AppShell>
+          </AuthProvider>
         </NextIntlClientProvider>
       </body>
     </html>

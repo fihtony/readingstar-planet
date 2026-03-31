@@ -30,9 +30,9 @@ describe("document-group-repository", () => {
 
     testDb
       .prepare(
-        `INSERT INTO users (id, nickname, role, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))`
+        `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`
       )
-      .run("user-1", "Test Kid", "child");
+      .run("user-1", "test@example.com", "Test Kid", "user");
   });
 
   afterEach(() => {
@@ -137,9 +137,9 @@ describe("document-group-repository", () => {
   it("does not leak groups between different users", () => {
     testDb
       .prepare(
-        `INSERT INTO users (id, nickname, role, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))`
+        `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`
       )
-      .run("user-2", "Other Kid", "child");
+      .run("user-2", "test2@example.com", "Other Kid", "user");
 
     createDocumentGroup({ userId: "user-1", name: "User 1 Group" });
     createDocumentGroup({ userId: "user-2", name: "User 2 Group" });

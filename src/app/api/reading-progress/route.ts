@@ -3,11 +3,10 @@ import {
   getReadingProgress,
   upsertReadingProgress,
 } from "@/lib/repositories/reading-progress-repository";
-
-const DEFAULT_USER_ID = "default-user";
+import { checkPermission } from "@/lib/permissions";
 
 export async function GET(request: NextRequest) {
-  const userId = request.nextUrl.searchParams.get("userId") ?? DEFAULT_USER_ID;
+  const { authContext } = await checkPermission(request, "public");
   const documentId = request.nextUrl.searchParams.get("documentId");
 
   if (!documentId) {
@@ -17,14 +16,19 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const progress = getReadingProgress(userId, documentId);
+  if (!authContext.user) {
+    return NextResponse.json({ progress: null, persisted: false });
+  }
+
+  const progress = getReadingProgress(authContext.user.id, documentId);
   return NextResponse.json({ progress });
 }
 
 export async function PUT(request: NextRequest) {
+  const { authContext } = await checkPermission(request, "public");
+
   try {
     const body = await request.json();
-    const userId = body.userId ?? DEFAULT_USER_ID;
 
     if (!body.documentId) {
       return NextResponse.json(
@@ -33,8 +37,12 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    if (!authContext.user) {
+      return NextResponse.json({ progress: null, persisted: false });
+    }
+
     const progress = upsertReadingProgress({
-      userId,
+      userId: authContext.user.id,
       documentId: body.documentId,
       currentLine: Math.max(0, Number(body.currentLine ?? 0)),
       totalLines: Math.max(0, Number(body.totalLines ?? 0)),

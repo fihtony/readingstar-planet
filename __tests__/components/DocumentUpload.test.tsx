@@ -4,10 +4,11 @@ import { DocumentUpload } from "@/components/upload/DocumentUpload";
 
 describe("DocumentUpload", () => {
   const defaultProps = {
-    onUpload: vi.fn(),
+    onImport: vi.fn().mockResolvedValue(undefined),
     isUploading: false,
     error: null as string | null,
     success: false,
+    groups: [] as { id: string; name: string; userId: string; position: number; createdAt: string }[],
   };
 
   it("renders the upload zone", () => {
@@ -27,11 +28,8 @@ describe("DocumentUpload", () => {
     expect(input.accept).toContain(".txt");
   });
 
-  it("calls onUpload when a file is selected", () => {
-    const onUpload = vi.fn();
-    const { container } = render(
-      <DocumentUpload {...defaultProps} onUpload={onUpload} />
-    );
+  it("shows parsing state when a file is selected", () => {
+    const { container } = render(<DocumentUpload {...defaultProps} />);
 
     const input = container.querySelector(
       'input[type="file"]'
@@ -39,7 +37,8 @@ describe("DocumentUpload", () => {
     const file = new File(["content"], "test.txt", { type: "text/plain" });
 
     fireEvent.change(input, { target: { files: [file] } });
-    expect(onUpload).toHaveBeenCalledWith(file);
+    // Component enters parsing state for TXT files
+    expect(screen.getByText(/extracting|parsing|preparing/i)).toBeInTheDocument();
   });
 
   it("shows loading state during upload", () => {

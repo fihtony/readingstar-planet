@@ -26,9 +26,8 @@ import {
   markReadCounted,
   shouldCountReadOnRefresh,
 } from "@/lib/read-count";
+import { useAuth, useCsrfFetch } from "@/hooks/useAuth";
 import type { Document, FontFamily, ParsedDocument, ReadingTheme } from "@/types";
-
-const DEFAULT_USER_ID = "default-user";
 const SESSION_BOOTSTRAP_PREFIX = "reading-session-bootstrap:";
 
 export default function ReadPage() {
@@ -48,6 +47,8 @@ export default function ReadPage() {
   const [isDetectiveOpen, setIsDetectiveOpen] = useState(false);
   const [settingsReady, setSettingsReady] = useState(false);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  const { isAuthenticated } = useAuth();
+  const csrfFetch = useCsrfFetch();
   const [ttsPitch, setTtsPitch] = useState(1.05);
   const [ttsVoice, setTtsVoice] = useState("");
   const [readCountCooldownMs, setReadCountCooldownMs] = useState<number | null>(null);
@@ -94,9 +95,9 @@ export default function ReadPage() {
       try {
         const [docRes, settingsRes, progressRes] = await Promise.all([
           fetch(`/api/documents?id=${documentId}`),
-          fetch(`/api/settings?userId=${DEFAULT_USER_ID}`),
+          fetch(`/api/settings`),
           fetch(
-            `/api/reading-progress?userId=${DEFAULT_USER_ID}&documentId=${documentId}`
+            `/api/reading-progress?documentId=${documentId}`
           ),
         ]);
 
@@ -173,12 +174,11 @@ export default function ReadPage() {
           sessionBootstrapIdRef.current = bootstrapId;
         }
 
-        const response = await fetch("/api/reading-sessions", {
+        const response = await csrfFetch("/api/reading-sessions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             sessionId: sessionBootstrapIdRef.current,
-            userId: DEFAULT_USER_ID,
             documentId,
             focusMode: readingFocus.mode,
             letterHelperEnabled: letterConfusion.config.enabled,
@@ -221,7 +221,7 @@ export default function ReadPage() {
 
     const incrementReadCount = async () => {
       try {
-        const response = await fetch("/api/documents", {
+        const response = await csrfFetch("/api/documents", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -252,11 +252,10 @@ export default function ReadPage() {
       return;
     }
 
-    void fetch("/api/reading-progress", {
+    void csrfFetch("/api/reading-progress", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        userId: DEFAULT_USER_ID,
         documentId,
         currentLine: readingFocus.currentLine,
         totalLines: document.lines.length,
@@ -269,19 +268,32 @@ export default function ReadPage() {
       return;
     }
 
-    void fetch("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: DEFAULT_USER_ID,
-        fontFamily,
-        fontSize,
-        lineSpacing,
-        maskOpacity: readingFocus.maskOpacity,
-        ttsSpeed: tts.speed,
-        theme: readingFocus.theme,
-      }),
-    });
+    if (isAuthenticated) {
+      void csrfFetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fontFamily,
+          fontSize,
+          lineSpacing,
+          maskOpacity: readingFocus.maskOpacity,
+          ttsSpeed: tts.speed,
+          theme: readingFocus.theme,
+        }),
+      });
+    } else {
+      // Guest: save to sessionStorage
+      try {
+        sessionStorage.setItem("rs_guest_settings", JSON.stringify({
+          fontFamily,
+          fontSize,
+          lineSpacing,
+          maskOpacity: readingFocus.maskOpacity,
+          ttsSpeed: tts.speed,
+          theme: readingFocus.theme,
+        }));
+      } catch { /* ignore */ }
+    }
   }, [
     settingsReady,
     fontFamily,
@@ -304,7 +316,7 @@ export default function ReadPage() {
 
       const finalState = latestSessionState.current;
 
-      void fetch("/api/reading-sessions", {
+      void csrfFetch("/api/reading-sessions", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

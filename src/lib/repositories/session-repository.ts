@@ -43,6 +43,14 @@ function rowToSession(row: SessionRow): ReadingSession {
   };
 }
 
+export function getSessionById(id: string): ReadingSession | null {
+  const db = getDatabase();
+  const row = db
+    .prepare("SELECT * FROM reading_sessions WHERE id = ?")
+    .get(id) as SessionRow | undefined;
+  return row ? rowToSession(row) : null;
+}
+
 export function createSession(input: CreateSessionInput): ReadingSession {
   const db = getDatabase();
   const id = input.id ?? uuidv4();

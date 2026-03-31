@@ -19,6 +19,13 @@ describe("settings-repository", () => {
     testDb.pragma("journal_mode = WAL");
     testDb.pragma("foreign_keys = ON");
     initializeSchema(testDb);
+
+    // Seed user for FK constraint
+    testDb
+      .prepare(
+        `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`
+      )
+      .run("default-user", "default@example.com", "Default", "user");
   });
 
   afterEach(() => {
@@ -53,5 +60,35 @@ describe("settings-repository", () => {
     expect(fetched.maskOpacity).toBe(0.4);
     expect(fetched.ttsSpeed).toBe(1.2);
     expect(fetched.theme).toBe("magnifier");
+  });
+
+  it("inherits admin-configured global defaults when creating settings for a new user (TP-SET-01)", () => {
+    // Change global defaults to non-standard values
+    testDb
+      .prepare(
+        `UPDATE app_metadata SET value = ? WHERE key = ?`
+      )
+      .run("system", "default_font_family");
+    testDb.prepare(`UPDATE app_metadata SET value = ? WHERE key = ?`).run("24", "default_font_size");
+    testDb.prepare(`UPDATE app_metadata SET value = ? WHERE key = ?`).run("2.2", "default_line_spacing");
+    testDb.prepare(`UPDATE app_metadata SET value = ? WHERE key = ?`).run("0.5", "default_mask_opacity");
+    testDb.prepare(`UPDATE app_metadata SET value = ? WHERE key = ?`).run("1.2", "default_tts_speed");
+    testDb.prepare(`UPDATE app_metadata SET value = ? WHERE key = ?`).run("magnifier", "default_theme");
+
+    // Seed a new user
+    testDb
+      .prepare(
+        `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`
+      )
+      .run("new-user", "new@example.com", "New", "user");
+
+    const settings = getOrCreateUserSettings("new-user");
+
+    expect(settings.fontFamily).toBe("system");
+    expect(settings.fontSize).toBe(24);
+    expect(settings.lineSpacing).toBe(2.2);
+    expect(settings.maskOpacity).toBe(0.5);
+    expect(settings.ttsSpeed).toBe(1.2);
+    expect(settings.theme).toBe("magnifier");
   });
 });

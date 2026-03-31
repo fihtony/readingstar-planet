@@ -33,16 +33,24 @@ export function getDocumentGroupById(id: string): DocumentGroup | null {
   return row ? rowToDocumentGroup(row) : null;
 }
 
-export function listDocumentGroups(userId: string): DocumentGroup[] {
+export function listDocumentGroups(userId?: string): DocumentGroup[] {
   const db = getDatabase();
-  const rows = db
-    .prepare(
-      `SELECT *
-       FROM document_groups
-       WHERE user_id = ?
-       ORDER BY position ASC, created_at ASC`
-    )
-    .all(userId) as DocumentGroupRow[];
+  const rows = userId
+    ? (db
+        .prepare(
+          `SELECT *
+           FROM document_groups
+           WHERE user_id = ?
+           ORDER BY position ASC, created_at ASC`
+        )
+        .all(userId) as DocumentGroupRow[])
+    : (db
+        .prepare(
+          `SELECT *
+           FROM document_groups
+           ORDER BY position ASC, created_at ASC`
+        )
+        .all() as DocumentGroupRow[]);
 
   return rows.map(rowToDocumentGroup);
 }
@@ -89,20 +97,36 @@ export function createDocumentGroup(input: {
 }
 
 export function reorderDocumentGroups(
-  userId: string,
-  orderedGroupIds: string[]
+  userIdOrOrderedGroupIds: string | string[],
+  orderedGroupIdsMaybe?: string[]
 ): DocumentGroup[] {
   const db = getDatabase();
   const now = new Date().toISOString();
-  const updateGroup = db.prepare(
-    `UPDATE document_groups
-     SET position = ?, updated_at = ?
-     WHERE id = ? AND user_id = ?`
-  );
+  const userId = Array.isArray(userIdOrOrderedGroupIds)
+    ? undefined
+    : userIdOrOrderedGroupIds;
+  const orderedGroupIds = Array.isArray(userIdOrOrderedGroupIds)
+    ? userIdOrOrderedGroupIds
+    : (orderedGroupIdsMaybe ?? []);
+  const updateGroup = userId
+    ? db.prepare(
+        `UPDATE document_groups
+         SET position = ?, updated_at = ?
+         WHERE id = ? AND user_id = ?`
+      )
+    : db.prepare(
+        `UPDATE document_groups
+         SET position = ?, updated_at = ?
+         WHERE id = ?`
+      );
 
   const transaction = db.transaction(() => {
     orderedGroupIds.forEach((groupId, index) => {
-      updateGroup.run(index, now, groupId, userId);
+      if (userId) {
+        updateGroup.run(index, now, groupId, userId);
+      } else {
+        updateGroup.run(index, now, groupId);
+      }
     });
   });
 
@@ -123,4 +147,12 @@ export function renameDocumentGroup(
     .run(name.trim(), now, id);
   if (result.changes === 0) return null;
   return getDocumentGroupById(id);
+}
+
+export function deleteDocumentGroup(id: string): boolean {
+  const db = getDatabase();
+  // Move documents in this group to have no group (null)
+  db.prepare("UPDATE documents SET group_id = NULL WHERE group_id = ?").run(id);
+  const result = db.prepare("DELETE FROM document_groups WHERE id = ?").run(id);
+  return result.changes > 0;
 }

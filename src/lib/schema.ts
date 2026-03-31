@@ -11,15 +11,91 @@ export function initializeSchema(db: Database.Database): void {
 
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
-      nickname TEXT NOT NULL,
-      avatar TEXT NOT NULL DEFAULT 'owl-default',
-      role TEXT NOT NULL CHECK (role IN ('child', 'parent', 'educator')),
-      locale TEXT NOT NULL DEFAULT 'en' CHECK (locale IN ('en', 'zh')),
-      parent_id TEXT,
+      google_id TEXT UNIQUE,
+      email TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL DEFAULT '',
+      nickname TEXT NOT NULL DEFAULT '',
+      avatar_url TEXT NOT NULL DEFAULT '',
+      avatar_source TEXT NOT NULL DEFAULT 'google'
+        CHECK (avatar_source IN ('google', 'custom')),
+      personal_note TEXT NOT NULL DEFAULT '',
+      role TEXT NOT NULL DEFAULT 'user'
+        CHECK (role IN ('admin', 'user')),
+      status TEXT NOT NULL DEFAULT 'pending_verification'
+        CHECK (status IN ('active', 'inactive', 'deleted', 'pending_verification')),
+      admin_notes TEXT NOT NULL DEFAULT '',
+      last_login_at DATETIME,
       created_at DATETIME NOT NULL DEFAULT (datetime('now')),
       updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (parent_id) REFERENCES users(id) ON DELETE SET NULL
+      deleted_at DATETIME
     );
+
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      ip_address TEXT,
+      raw_user_agent TEXT NOT NULL DEFAULT '',
+      browser_name TEXT NOT NULL DEFAULT '',
+      browser_version TEXT NOT NULL DEFAULT '',
+      os_name TEXT NOT NULL DEFAULT '',
+      os_version TEXT NOT NULL DEFAULT '',
+      device_type TEXT NOT NULL DEFAULT 'unknown'
+        CHECK (device_type IN ('desktop', 'tablet', 'mobile', 'bot', 'unknown')),
+      device_model TEXT NOT NULL DEFAULT '',
+      created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      last_seen_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      expires_at DATETIME NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at);
+
+    CREATE TABLE IF NOT EXISTS user_activity_log (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      detail TEXT NOT NULL DEFAULT '',
+      ip_address TEXT,
+      created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_activity_log_user ON user_activity_log(user_id);
+    CREATE INDEX IF NOT EXISTS idx_activity_log_action ON user_activity_log(action);
+    CREATE INDEX IF NOT EXISTS idx_activity_log_created ON user_activity_log(created_at);
+
+    CREATE TABLE IF NOT EXISTS admin_audit_log (
+      id TEXT PRIMARY KEY,
+      admin_user_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id TEXT,
+      detail TEXT NOT NULL DEFAULT '',
+      created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_admin ON admin_audit_log(admin_user_id);
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_log(created_at);
+
+    CREATE TABLE IF NOT EXISTS user_reading_stats (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      document_id TEXT NOT NULL,
+      read_count INTEGER NOT NULL DEFAULT 0,
+      total_time_sec INTEGER NOT NULL DEFAULT 0,
+      timed_session_count INTEGER NOT NULL DEFAULT 0,
+      first_read_at DATETIME,
+      last_read_at DATETIME,
+      created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+      UNIQUE(user_id, document_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_reading_stats_user ON user_reading_stats(user_id);
 
     CREATE TABLE IF NOT EXISTS document_groups (
       id TEXT PRIMARY KEY,
@@ -96,6 +172,7 @@ export function initializeSchema(db: Database.Database): void {
       tts_voice TEXT NOT NULL DEFAULT '',
       daily_time_limit INTEGER NOT NULL DEFAULT 30 CHECK (daily_time_limit BETWEEN 5 AND 120),
       theme TEXT NOT NULL DEFAULT 'flashlight' CHECK (theme IN ('flashlight', 'magnifier', 'magic-wand')),
+      locale TEXT NOT NULL DEFAULT 'en' CHECK (locale IN ('en', 'zh')),
       updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -109,13 +186,233 @@ export function initializeSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_app_metadata_updated_at ON app_metadata(updated_at);
   `);
 
+  migrateUsersTable(db);
+  migrateUsersTableColumns(db);
+  // Create user indexes after migrations so columns are guaranteed to exist
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+    CREATE INDEX IF NOT EXISTS idx_users_role_status ON users(role, status);
+  `);
+  ensureUserSettingsLocale(db);
   ensureDocumentGroupingSchema(db);
+  seedDefaultAppMetadata(db);
+  seedInitialAdmin(db);
+}
 
-  // Seed a default user for MVP (no auth yet)
+/**
+ * Incrementally add any new columns that may be missing from an existing users
+ * table (e.g. databases created at an intermediate schema version that already
+ * had the `email` column but not the full OAuth column set).
+ */
+function migrateUsersTableColumns(db: Database.Database): void {
+  // google_id can't use UNIQUE in ALTER TABLE; create a unique index instead.
+  if (!hasColumn(db, "users", "google_id")) {
+    db.prepare("ALTER TABLE users ADD COLUMN google_id TEXT").run();
+    db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)"
+    );
+  }
+  if (!hasColumn(db, "users", "name")) {
+    db.prepare(
+      "ALTER TABLE users ADD COLUMN name TEXT NOT NULL DEFAULT ''"
+    ).run();
+  }
+  if (!hasColumn(db, "users", "avatar_url")) {
+    db.prepare(
+      "ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT ''"
+    ).run();
+  }
+  if (!hasColumn(db, "users", "avatar_source")) {
+    db.prepare(
+      "ALTER TABLE users ADD COLUMN avatar_source TEXT NOT NULL DEFAULT 'google'"
+    ).run();
+  }
+  if (!hasColumn(db, "users", "personal_note")) {
+    db.prepare(
+      "ALTER TABLE users ADD COLUMN personal_note TEXT NOT NULL DEFAULT ''"
+    ).run();
+  }
+  if (!hasColumn(db, "users", "status")) {
+    db.prepare(
+      "ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'"
+    ).run();
+  }
+  if (!hasColumn(db, "users", "admin_notes")) {
+    db.prepare(
+      "ALTER TABLE users ADD COLUMN admin_notes TEXT NOT NULL DEFAULT ''"
+    ).run();
+  }
+  if (!hasColumn(db, "users", "last_login_at")) {
+    db.prepare(
+      "ALTER TABLE users ADD COLUMN last_login_at DATETIME"
+    ).run();
+  }
+  if (!hasColumn(db, "users", "deleted_at")) {
+    db.prepare(
+      "ALTER TABLE users ADD COLUMN deleted_at DATETIME"
+    ).run();
+  }
+}
+
+/**
+ * Migrate users table from old schema (child/parent/educator roles)
+ * to new schema (admin/user roles + OAuth fields).
+ */
+function migrateUsersTable(db: Database.Database): void {
+  // Check if migration is needed by looking for old role values
+  if (!hasColumn(db, "users", "email")) {
+    // Old schema detected – need to migrate
+    // SQLite doesn't support ALTER COLUMN, so we recreate via migration
+    const oldUsers = db.prepare("SELECT * FROM users").all() as Array<{
+      id: string;
+      nickname: string;
+      avatar: string;
+      role: string;
+      locale: string;
+      parent_id: string | null;
+      created_at: string;
+      updated_at: string;
+    }>;
+
+    // Use the safe SQLite migration pattern:
+    // 1. Create new table with a temp name  (no FK-reference updates triggered)
+    // 2. Copy data
+    // 3. DROP the original table           (no FK-reference updates triggered)
+    // 4. RENAME temp → original            (SQLite would only update refs pointing
+    //                                        at the temp name, of which there are
+    //                                        none, so child table schemas are left
+    //                                        pointing at the original "users" name)
+    // This avoids the SQLite 3.26+ auto-update of FK references that would leave
+    // child tables (auth_sessions, etc.) with a stale "REFERENCES users_old" after
+    // the old table is dropped.
+    db.pragma("foreign_keys = OFF");
+
+    db.exec(`
+      CREATE TABLE users_new (
+        id TEXT PRIMARY KEY,
+        google_id TEXT UNIQUE,
+        email TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL DEFAULT '',
+        nickname TEXT NOT NULL DEFAULT '',
+        avatar_url TEXT NOT NULL DEFAULT '',
+        avatar_source TEXT NOT NULL DEFAULT 'google'
+          CHECK (avatar_source IN ('google', 'custom')),
+        personal_note TEXT NOT NULL DEFAULT '',
+        role TEXT NOT NULL DEFAULT 'user'
+          CHECK (role IN ('admin', 'user')),
+        status TEXT NOT NULL DEFAULT 'pending_verification'
+          CHECK (status IN ('active', 'inactive', 'deleted', 'pending_verification')),
+        admin_notes TEXT NOT NULL DEFAULT '',
+        last_login_at DATETIME,
+        created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+        updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+        deleted_at DATETIME
+      );
+    `);
+
+    // Migrate old users into users_new: default-user becomes admin
+    for (const u of oldUsers) {
+      const newRole = u.id === "default-user" ? "admin" : "user";
+      const email = u.id === "default-user" ? "default@readingstar.local" : `${u.id}@readingstar.local`;
+      db.prepare(
+        `INSERT INTO users_new (id, email, name, nickname, avatar_url, avatar_source, role, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`
+      ).run(
+        u.id,
+        email,
+        u.nickname,
+        u.nickname,
+        "",
+        "google",
+        newRole,
+        u.created_at,
+        u.updated_at
+      );
+    }
+
+    // Drop old table (does NOT update FK references in child tables)
+    db.exec("DROP TABLE users");
+    // Rename temp table to canonical name; SQLite 3.26+ would only update FK refs
+    // pointing at "users_new" – there are none – so child table schemas keep their
+    // existing "REFERENCES users" text, which now resolves correctly.
+    db.exec("ALTER TABLE users_new RENAME TO users");
+
+    db.pragma("foreign_keys = ON");
+  }
+}
+
+/**
+ * Add locale column to user_settings if missing (incremental migration).
+ */
+function ensureUserSettingsLocale(db: Database.Database): void {
+  if (!hasColumn(db, "user_settings", "locale")) {
+    db.prepare(
+      "ALTER TABLE user_settings ADD COLUMN locale TEXT NOT NULL DEFAULT 'en'"
+    ).run();
+  }
+}
+
+/**
+ * Seed default global settings into app_metadata.
+ */
+function seedDefaultAppMetadata(db: Database.Database): void {
+  const defaults: Record<string, string> = {
+    registration_policy: "invite-only",
+    default_font_family: "opendyslexic",
+    default_font_size: "20",
+    default_line_spacing: "1.8",
+    default_mask_opacity: "0.7",
+    default_tts_speed: "0.8",
+    default_tts_pitch: "1.05",
+    default_theme: "flashlight",
+  };
+
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO app_metadata (key, value, updated_at) VALUES (?, ?, datetime('now'))`
+  );
+
+  for (const [key, value] of Object.entries(defaults)) {
+    insert.run(key, value);
+  }
+}
+
+/**
+ * Seed initial admin from INITIAL_ADMIN_EMAIL env var.
+ *
+ * Runs when:
+ *   1. INITIAL_ADMIN_EMAIL is configured, AND
+ *   2. That email is not already in the users table, AND
+ *   3. There are no "real" (non-legacy) admin users yet.
+ *
+ * Legacy admins are those created by the old single-user migration whose email
+ * ends with "@readingstar.local".  They cannot log in with Google, so we still
+ * allow the initial admin to be seeded even when they exist.
+ *
+ * Once a real admin (with a proper email) exists, the env var is ignored –
+ * changing INITIAL_ADMIN_EMAIL after that will not create a new seed user.
+ */
+function seedInitialAdmin(db: Database.Database): void {
+  const initialEmail = process.env.INITIAL_ADMIN_EMAIL;
+  if (!initialEmail) return;
+
+  // Don't seed if this email is already registered
+  const existingByEmail = db.prepare(
+    "SELECT COUNT(*) AS count FROM users WHERE email = ?"
+  ).get(initialEmail) as { count: number };
+  if (existingByEmail.count > 0) return;
+
+  // Don't seed if a real admin already exists (non-legacy email)
+  const realAdminCount = db.prepare(
+    "SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND email NOT LIKE '%@readingstar.local'"
+  ).get() as { count: number };
+  if (realAdminCount.count > 0) return;
+
+  const id = randomUUID();
   db.prepare(
-    `INSERT OR IGNORE INTO users (id, nickname, role, created_at, updated_at)
-     VALUES ('default-user', 'Reader', 'child', datetime('now'), datetime('now'))`
-  ).run();
+    `INSERT INTO users (id, email, name, nickname, role, status, created_at, updated_at)
+     VALUES (?, ?, '', '', 'admin', 'pending_verification', datetime('now'), datetime('now'))`
+  ).run(id, initialEmail);
 }
 
 function ensureDocumentGroupingSchema(db: Database.Database): void {

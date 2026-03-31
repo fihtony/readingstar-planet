@@ -1,39 +1,10 @@
 import { test, expect } from "@playwright/test";
-
-function uniqueTitle(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-}
-
-async function resetDocuments(
-  request: import("@playwright/test").APIRequestContext
-) {
-  const response = await request.get("/api/documents");
-  expect(response.ok()).toBeTruthy();
-
-  const payload = await response.json();
-  for (const document of payload.documents as Array<{ id: string }>) {
-    const deleteResponse = await request.delete(`/api/documents?id=${document.id}`);
-    expect(deleteResponse.ok()).toBeTruthy();
-  }
-}
-
-async function createDocumentViaApi(
-  request: import("@playwright/test").APIRequestContext,
-  title: string,
-  content: string
-) {
-  const response = await request.post("/api/documents", {
-    data: {
-      title,
-      content,
-      groupId: null,
-    },
-  });
-
-  expect(response.ok()).toBeTruthy();
-  const payload = await response.json();
-  return payload.document as { id: string; title: string };
-}
+import {
+  createDocumentViaApi,
+  loginPageAsAdmin,
+  resetDocuments,
+  uniqueTitle,
+} from "./helpers/auth";
 
 async function openDocumentByTitle(
   page: import("@playwright/test").Page,
@@ -69,6 +40,7 @@ test.describe("Reading Flow", () => {
   });
 
   test("library shows upload button", async ({ page }) => {
+    await loginPageAsAdmin(page, { email: "reading-flow-admin@example.com" });
     await page.goto("/library");
     await expect(
       page.getByRole("button", { name: /upload a book/i })
@@ -76,8 +48,9 @@ test.describe("Reading Flow", () => {
   });
 
   test("upload zone appears when clicking upload", async ({ page }) => {
+    await loginPageAsAdmin(page, { email: "reading-flow-admin@example.com" });
     await page.goto("/library");
-    await page.click("text=Upload a Book");
+    await page.getByRole("button", { name: /upload a book/i }).click();
     await expect(page.getByText(/choose a file/i).first()).toBeVisible();
   });
 });

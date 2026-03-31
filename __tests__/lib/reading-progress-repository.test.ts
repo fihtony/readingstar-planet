@@ -20,6 +20,13 @@ describe("reading-progress-repository", () => {
     testDb.pragma("journal_mode = WAL");
     testDb.pragma("foreign_keys = ON");
     initializeSchema(testDb);
+
+    // Seed user for FK constraint
+    testDb
+      .prepare(
+        `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`
+      )
+      .run("default-user", "default@example.com", "Default", "user");
   });
 
   afterEach(() => {

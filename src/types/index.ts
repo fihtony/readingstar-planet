@@ -1,20 +1,90 @@
-export type UserRole = "child" | "parent" | "educator";
+export type UserRole = "admin" | "user";
+export type UserStatus = "active" | "inactive" | "deleted" | "pending_verification";
+export type AvatarSource = "google" | "custom";
 export type Locale = "en" | "zh";
 export type FileType = "pdf" | "txt";
 export type FocusMode = "single-line" | "sliding-window" | "karaoke";
 export type ReadingTheme = "flashlight" | "magnifier" | "magic-wand";
 export type FontFamily = "opendyslexic" | "system";
 export type AchievementType = "streak" | "effort" | "milestone";
+export type DeviceType = "desktop" | "tablet" | "mobile" | "bot" | "unknown";
+export type RegistrationPolicy = "open" | "invite-only";
 
 export interface User {
   id: string;
+  googleId: string | null;
+  email: string;
+  name: string;
   nickname: string;
-  avatar: string;
+  avatarUrl: string;
+  avatarSource: AvatarSource;
+  personalNote: string;
   role: UserRole;
-  locale: Locale;
-  parentId: string | null;
+  status: UserStatus;
+  adminNotes: string;
+  lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface AuthSession {
+  id: string;
+  userId: string;
+  ipAddress: string | null;
+  rawUserAgent: string;
+  browserName: string;
+  browserVersion: string;
+  osName: string;
+  osVersion: string;
+  deviceType: DeviceType;
+  deviceModel: string;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+}
+
+export interface UserActivityLog {
+  id: string;
+  userId: string;
+  action: string;
+  detail: string;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
+export interface AdminAuditLog {
+  id: string;
+  adminUserId: string;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  detail: string;
+  createdAt: string;
+}
+
+export interface UserReadingStats {
+  id: string;
+  userId: string;
+  documentId: string;
+  readCount: number;
+  totalTimeSec: number;
+  timedSessionCount: number;
+  firstReadAt: string | null;
+  lastReadAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Safe user info for /api/auth/me (no admin_notes, personal_note for non-owner) */
+export interface PublicUser {
+  id: string;
+  email: string;
+  name: string;
+  nickname: string;
+  avatarUrl: string;
+  role: UserRole;
+  status: UserStatus;
 }
 
 export interface Document {
@@ -83,6 +153,7 @@ export interface UserSettings {
   ttsVoice: string;
   dailyTimeLimit: number;
   theme: ReadingTheme;
+  locale: Locale;
   updatedAt: string;
 }
 

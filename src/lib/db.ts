@@ -13,12 +13,13 @@ let db: Database.Database | null = null;
 export function getDatabase(): Database.Database {
   if (!db) {
     fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-    db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
-    initializeSchema(db);
-    seedSampleDocuments(db);
-    initializeSchema(db);
+    const newDb = new Database(DB_PATH);
+    newDb.pragma("journal_mode = WAL");
+    newDb.pragma("foreign_keys = ON");
+    initializeSchema(newDb);
+    seedSampleDocuments(newDb);
+    initializeSchema(newDb);
+    db = newDb; // only assign after successful initialization
   }
   return db;
 }

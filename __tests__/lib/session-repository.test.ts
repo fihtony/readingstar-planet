@@ -25,9 +25,9 @@ describe("session-repository", () => {
     // Seed user and document for FK constraints
     testDb
       .prepare(
-        `INSERT INTO users (id, nickname, role, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))`
+        `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`
       )
-      .run("user-1", "Test Kid", "child");
+      .run("user-1", "test@example.com", "Test Kid", "user");
 
     createDocument({
       title: "Test Doc",

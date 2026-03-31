@@ -25,7 +25,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `rm -f ${e2eDbPath} ${e2eDbPath}-shm ${e2eDbPath}-wal && READINGSTAR_DB_PATH=${e2eDbPath} READINGSTAR_DISABLE_SAMPLE_SEED=1 npm --prefix ${appRoot} run build && READINGSTAR_DB_PATH=${e2eDbPath} READINGSTAR_DISABLE_SAMPLE_SEED=1 npm --prefix ${appRoot} run start -- --port 3100`,
+    command: `rm -f ${e2eDbPath} ${e2eDbPath}-shm ${e2eDbPath}-wal && READINGSTAR_DB_PATH=${e2eDbPath} READINGSTAR_DISABLE_SAMPLE_SEED=1 READINGSTAR_ENABLE_TEST_AUTH=1 npm --prefix ${appRoot} run build && READINGSTAR_DB_PATH=${e2eDbPath} READINGSTAR_DISABLE_SAMPLE_SEED=1 READINGSTAR_ENABLE_TEST_AUTH=1 npm --prefix ${appRoot} run start -- --port 3100`,
     url: "http://127.0.0.1:3100",
     reuseExistingServer: false,
     timeout: 180000,
