@@ -108,7 +108,7 @@ export function ReadingFocusMode({
 
   return (
     <div
-      className="reading-container relative w-full rounded-2xl px-3 pb-4 pt-10"
+      className="reading-container relative w-full rounded-2xl px-3 pb-4 pt-4"
       role="article"
       aria-label="Reading area"
       data-theme={theme}
@@ -119,14 +119,6 @@ export function ReadingFocusMode({
         background: themeStyle.containerBackground,
       }}
     >
-      {/* Theme indicator */}
-      <div
-        className={`absolute left-3 top-2 inline-flex items-center rounded-full border px-2.5 py-1 text-sm font-medium ${themeStyle.badgeClassName}`}
-        aria-hidden="true"
-      >
-        {THEME_EMOJIS[theme]}
-      </div>
-
       {effectiveParagraphs.map((para, paraIndex) => {
         const paraHasFocused = para.sentences.some(
           (_, si) => isLineFocused(para.globalStartIndex + si)

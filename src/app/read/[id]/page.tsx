@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import React, {
   useState,
@@ -25,7 +26,7 @@ import {
   markReadCounted,
   shouldCountReadOnRefresh,
 } from "@/lib/read-count";
-import type { Document, FontFamily, ParsedDocument } from "@/types";
+import type { Document, FontFamily, ParsedDocument, ReadingTheme } from "@/types";
 
 const DEFAULT_USER_ID = "default-user";
 const SESSION_BOOTSTRAP_PREFIX = "reading-session-bootstrap:";
@@ -33,6 +34,7 @@ const SESSION_BOOTSTRAP_PREFIX = "reading-session-bootstrap:";
 export default function ReadPage() {
   const mascot = useTranslations("mascot");
   const nav = useTranslations("nav");
+  const reading = useTranslations("reading");
   const params = useParams();
   const documentId = params.id as string;
 
@@ -365,6 +367,31 @@ export default function ReadPage() {
   // Must be called unconditionally — before any early returns
   const currentLineText = document?.lines[readingFocus.currentLine] ?? "";
   const followAlong = useFollowAlong(currentLineText);
+  const themeOptions: {
+    value: ReadingTheme;
+    label: string;
+    icon: string;
+    activeClassName: string;
+  }[] = [
+    {
+      value: "flashlight",
+      label: reading("themes.flashlight"),
+      icon: "🔦",
+      activeClassName: "border-amber-300 bg-amber-100 text-amber-800 shadow-[0_6px_18px_rgba(245,158,11,0.22)]",
+    },
+    {
+      value: "magnifier",
+      label: reading("themes.magnifier"),
+      icon: "🔍",
+      activeClassName: "border-sky-300 bg-sky-100 text-sky-700 shadow-[0_6px_18px_rgba(14,165,233,0.18)]",
+    },
+    {
+      value: "magic-wand",
+      label: reading("themes.magicWand"),
+      icon: "✨",
+      activeClassName: "border-lime-300 bg-lime-100 text-lime-800 shadow-[0_6px_18px_rgba(132,204,22,0.2)]",
+    },
+  ];
 
   if (loading) {
     return (
@@ -388,19 +415,45 @@ export default function ReadPage() {
     <div className="flex flex-col gap-4 pb-24">
       <BreakReminder active={!loading && !!document} />
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-4">
         <Link
           href="/library"
-          className="btn-kid inline-flex items-center rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-bold text-sky-700 transition-colors hover:bg-sky-100"
+          aria-label={nav("library")}
+          title={nav("library")}
+          className="group relative flex shrink-0 items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 rounded-md"
         >
-          ← {nav("library")}
+          <Image
+            src="/images/back_off.png"
+            alt=""
+            width={32}
+            height={32}
+            className="h-8 w-8 object-contain opacity-100 transition-opacity duration-150 group-hover:opacity-0 group-focus-visible:opacity-0"
+          />
+          <Image
+            src="/images/back_lit.png"
+            alt=""
+            width={32}
+            height={32}
+            className="absolute h-8 w-8 object-contain opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+          />
+          <span className="sr-only">{nav("library")}</span>
         </Link>
+
         <h1
-          className="min-w-0 flex-1 text-xl font-bold"
+          className="min-w-0 flex-1 text-xl font-bold leading-tight sm:text-2xl"
           style={{ color: "var(--color-warm-orange)" }}
         >
           📖 {document.title}
         </h1>
+
+        <span
+          className="shrink-0 select-none text-2xl leading-none"
+          aria-label={`${reading("settings.theme")}: ${themeOptions.find((t) => t.value === readingFocus.theme)?.label ?? ""}`}
+          title={themeOptions.find((t) => t.value === readingFocus.theme)?.label}
+          aria-live="polite"
+        >
+          {themeOptions.find((t) => t.value === readingFocus.theme)?.icon ?? "🔦"}
+        </span>
       </div>
 
       <div
@@ -451,7 +504,7 @@ export default function ReadPage() {
         ⬆️ ⬇️ Arrow keys to navigate • Space to play/pause • Click a paragraph to jump
       </p>
 
-      {/* Floating bottom bar: TTS + Follow Along + Settings gear */}
+      {/* Floating control bar: TTS + Follow Along */}
       <FloatingControls
         ttsSupported={tts.isSupported}
         ttsPlaying={tts.isPlaying}

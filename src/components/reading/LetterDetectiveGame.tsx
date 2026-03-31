@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
-import { countLetter } from "@/lib/letter-confusion";
+import { useTranslations, useLocale } from "next-intl";
+import { countLetter, CONFUSABLE_LETTERS } from "@/lib/letter-confusion";
 import { Button } from "@/components/ui/Button";
 
 interface LetterDetectiveGameProps {
@@ -12,11 +12,75 @@ interface LetterDetectiveGameProps {
 
 const TARGET_LETTERS = ["b", "d", "p", "q"] as const;
 
+/**
+ * Split text into word/non-word tokens and render each word inside a
+ * no-break inline-block span so that a target-letter <button> inside a
+ * word can never be orphaned on a line by itself.
+ */
+function renderDetectiveText(
+  text: string,
+  targetLetter: string,
+  foundPositions: number[],
+  onMark: (index: number) => void,
+): React.ReactNode {
+  // Build a list of {segment, startIndex} tokens keeping absolute indices.
+  const tokens: Array<{ segment: string; startIndex: number }> = [];
+  // \S+ = word, \s+ = whitespace/newlines
+  const re = /\S+|\s+/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    tokens.push({ segment: m[0], startIndex: m.index });
+  }
+
+  return tokens.map(({ segment, startIndex }) => {
+    const isWhitespace = /^\s+$/.test(segment);
+
+    if (isWhitespace) {
+      return <span key={`ws-${startIndex}`}>{segment}</span>;
+    }
+
+    // Render each character of the word; wrap the whole word in a nowrap span.
+    const chars = segment.split("").map((char, charOffset) => {
+      const absIndex = startIndex + charOffset;
+      const isTarget = char.toLowerCase() === targetLetter;
+      const isFound = foundPositions.includes(absIndex);
+
+      if (!isTarget) {
+        return <span key={absIndex}>{char}</span>;
+      }
+
+      return (
+        <button
+          key={absIndex}
+          type="button"
+          className={`mx-[1px] rounded-md px-1 transition-colors ${
+            isFound
+              ? "bg-green-200 text-green-900"
+              : "bg-yellow-200 text-yellow-900 hover:bg-yellow-300"
+          }`}
+          onClick={() => onMark(absIndex)}
+          aria-label={`Mark ${char} at position ${absIndex + 1}`}
+          disabled={isFound}
+        >
+          {char}
+        </button>
+      );
+    });
+
+    return (
+      <span key={`word-${startIndex}`} style={{ display: "inline-block", whiteSpace: "nowrap" }}>
+        {chars}
+      </span>
+    );
+  });
+}
+
 export function LetterDetectiveGame({
   text,
   onClose,
 }: LetterDetectiveGameProps) {
   const t = useTranslations("game.detective");
+  const locale = useLocale();
   const availableLetters = useMemo(
     () => TARGET_LETTERS.filter((letter) => countLetter(text, letter) > 0),
     [text]
@@ -44,12 +108,13 @@ export function LetterDetectiveGame({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[100] overflow-y-auto bg-black/30"
       role="dialog"
       aria-modal="true"
       aria-label={t("title")}
     >
-      <div className="w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl border border-gray-100">
+      <div className="flex min-h-full items-start justify-center p-4">
+      <div className="my-4 w-full max-w-3xl shrink-0 rounded-3xl bg-white p-6 shadow-2xl border border-gray-100">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2
@@ -59,7 +124,19 @@ export function LetterDetectiveGame({
               {t("title")}
             </h2>
             <p className="mt-2 text-sm text-gray-600">
-              {t("instruction", { letter: targetLetter })}
+              {(() => {
+                const upper = targetLetter.toUpperCase();
+                const lower = targetLetter.toLowerCase();
+                const color = CONFUSABLE_LETTERS[targetLetter]?.colorHex ?? "#FF8C42";
+                const hl = (letter: string) => (
+                  <strong style={{ color, fontWeight: "bold" }}>{letter}</strong>
+                );
+                return locale === "zh" ? (
+                  <>找出所有的 {hl(upper)} 和 {hl(lower)} 字母！点击它们来标记！</>
+                ) : (
+                  <>Find all the {hl(upper)} and {hl(lower)} letters! Tap them to mark!</>
+                );
+              })()}
             </p>
           </div>
           <Button
@@ -90,31 +167,7 @@ export function LetterDetectiveGame({
         </div>
 
         <div className="mt-4 rounded-2xl bg-[#FFF9F0] p-4 leading-8 text-lg">
-          {text.split("").map((char, index) => {
-            const isTarget = char.toLowerCase() === targetLetter;
-            const isFound = foundPositions.includes(index);
-
-            if (!isTarget) {
-              return <span key={`${char}-${index}`}>{char}</span>;
-            }
-
-            return (
-              <button
-                key={`${char}-${index}`}
-                type="button"
-                className={`mx-[1px] rounded-md px-1 transition-colors ${
-                  isFound
-                    ? "bg-green-200 text-green-900"
-                    : "bg-yellow-200 text-yellow-900 hover:bg-yellow-300"
-                }`}
-                onClick={() => handleMark(index)}
-                aria-label={`Mark ${char} at position ${index + 1}`}
-                disabled={isFound}
-              >
-                {char}
-              </button>
-            );
-          })}
+          {renderDetectiveText(text, targetLetter, foundPositions, handleMark)}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -130,6 +183,7 @@ export function LetterDetectiveGame({
             </p>
           ) : null}
         </div>
+      </div>
       </div>
     </div>
   );

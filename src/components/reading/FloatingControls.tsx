@@ -1,11 +1,33 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { splitIntoWords } from "@/lib/text-processor";
 
 /* ------------------------------------------------------------------ */
-/*  Floating bottom bar with TTS + Follow-along controls              */
+/*  Floating draggable bar with TTS + Follow-along controls           */
 /* ------------------------------------------------------------------ */
+
+const VIEWPORT_MARGIN = 16;
+
+type FloatingPosition = {
+  left: number;
+  top: number;
+};
+
+function getViewportBounds() {
+  if (typeof window === "undefined") {
+    return { left: 0, top: 0, width: 0, height: 0 };
+  }
+
+  // position:fixed is relative to the layout viewport — use window.innerWidth/innerHeight
+  // (visual viewport offsetLeft/offsetTop would misalign on mobile zoom/pan)
+  return {
+    left: 0,
+    top: 0,
+    width: window.innerWidth,
+    height: window.innerHeight,
+  };
+}
 
 interface FloatingControlsProps {
   /* TTS */
@@ -38,117 +60,169 @@ export function FloatingControls({
   onFollowAlongStop,
   followAlongSupported,
 }: FloatingControlsProps) {
-  // Draggable position — null means "use default CSS (bottom-center)"
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const [pos, setPos] = useState<FloatingPosition | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
-  const dragActive = useRef(false);
-  const dragOrigin = useRef({ mouseX: 0, mouseY: 0, posX: 0, posY: 0 });
+  const dragState = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
+  const isDraggingRef = useRef(false);
 
-  const clampPositionToViewport = (nextPos: { x: number; y: number }) => {
+  const clampPositionToViewport = useCallback((nextPos: FloatingPosition) => {
     if (!barRef.current) {
       return nextPos;
     }
 
-    const halfW = barRef.current.offsetWidth / 2;
-    const halfH = barRef.current.offsetHeight / 2;
+    const { left, top, width, height } = getViewportBounds();
+    const minLeft = left + VIEWPORT_MARGIN;
+    const minTop = top + VIEWPORT_MARGIN;
+    const maxLeft = left + width - barRef.current.offsetWidth - VIEWPORT_MARGIN;
+    const maxTop = top + height - barRef.current.offsetHeight - VIEWPORT_MARGIN;
 
     return {
-      x: Math.max(halfW, Math.min(window.innerWidth - halfW, nextPos.x)),
-      y: Math.max(halfH, Math.min(window.innerHeight - halfH, nextPos.y)),
-    };
-  };
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent | TouchEvent) => {
-      if (!dragActive.current || !barRef.current) return;
-      const clientX =
-        "touches" in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
-      const clientY =
-        "touches" in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
-      setPos(
-        clampPositionToViewport({
-          x: dragOrigin.current.posX + clientX - dragOrigin.current.mouseX,
-          y: dragOrigin.current.posY + clientY - dragOrigin.current.mouseY,
-        })
-      );
-    };
-    const onUp = () => {
-      dragActive.current = false;
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    window.addEventListener("touchmove", onMove, { passive: true });
-    window.addEventListener("touchend", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      window.removeEventListener("touchmove", onMove);
-      window.removeEventListener("touchend", onUp);
+      left: Math.min(Math.max(nextPos.left, minLeft), Math.max(minLeft, maxLeft)),
+      top: Math.min(Math.max(nextPos.top, minTop), Math.max(minTop, maxTop)),
     };
   }, []);
 
+  const getCenteredPosition = useCallback(() => {
+    if (!barRef.current) {
+      return null;
+    }
+
+    const { left, top, width, height } = getViewportBounds();
+
+    return clampPositionToViewport({
+      left: left + (width - barRef.current.offsetWidth) / 2,
+      top: top + (height - barRef.current.offsetHeight) / 2,
+    });
+  }, [clampPositionToViewport]);
+
+  useLayoutEffect(() => {
+    if (!barRef.current) {
+      return;
+    }
+
+    setPos((currentPos) => currentPos ?? getCenteredPosition());
+  }, [getCenteredPosition]);
+
   useEffect(() => {
     const keepVisible = () => {
+      // Don't re-clamp while dragging — the drag handlers own the position
+      if (isDraggingRef.current) {
+        return;
+      }
+
       setPos((currentPos) => {
-        if (!currentPos || !barRef.current) {
+        if (!barRef.current) {
           return currentPos;
         }
 
-        return clampPositionToViewport(currentPos);
+        return currentPos
+          ? clampPositionToViewport(currentPos)
+          : getCenteredPosition();
       });
     };
 
     window.addEventListener("resize", keepVisible);
     window.visualViewport?.addEventListener("resize", keepVisible);
+    window.visualViewport?.addEventListener("scroll", keepVisible);
 
     return () => {
       window.removeEventListener("resize", keepVisible);
       window.visualViewport?.removeEventListener("resize", keepVisible);
+      window.visualViewport?.removeEventListener("scroll", keepVisible);
     };
-  }, []);
+  }, [clampPositionToViewport, getCenteredPosition]);
 
-  const handleDragStart = (
-    e: React.MouseEvent | React.TouchEvent
-  ) => {
-    const clientX =
-      "touches" in e ? e.touches[0].clientX : e.clientX;
-    const clientY =
-      "touches" in e ? e.touches[0].clientY : e.clientY;
-    let currentX: number;
-    let currentY: number;
-    if (pos) {
-      currentX = pos.x;
-      currentY = pos.y;
-    } else if (barRef.current) {
-      const rect = barRef.current.getBoundingClientRect();
-      currentX = rect.left + rect.width / 2;
-      currentY = rect.top + rect.height / 2;
-    } else {
+  useEffect(() => {
+    if (!barRef.current || typeof ResizeObserver === "undefined") {
       return;
     }
-    dragActive.current = true;
-    dragOrigin.current = {
-      mouseX: clientX,
-      mouseY: clientY,
-      posX: currentX,
-      posY: currentY,
+
+    const observer = new ResizeObserver(() => {
+      // Skip repositioning while the user is actively dragging
+      if (isDraggingRef.current) {
+        return;
+      }
+
+      setPos((currentPos) => {
+        if (!barRef.current) {
+          return currentPos;
+        }
+
+        return currentPos
+          ? clampPositionToViewport(currentPos)
+          : getCenteredPosition();
+      });
+    });
+
+    observer.observe(barRef.current);
+
+    return () => {
+      observer.disconnect();
     };
+  }, [clampPositionToViewport, getCenteredPosition]);
+
+  const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!barRef.current) {
+      return;
+    }
+
+    // Use pos state directly — this IS the CSS left/top source of truth.
+    // Reading getBoundingClientRect() can misalign when any ancestor has a CSS transform.
+    const barLeft = pos?.left ?? 0;
+    const barTop = pos?.top ?? 0;
+
+    dragState.current = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - barLeft,
+      offsetY: event.clientY - barTop,
+    };
+    isDraggingRef.current = true;
+
+    // Capture on the BAR element (not the child handle) so that onPointerMove
+    // and onPointerUp on the bar receive all captured events directly.
+    barRef.current.setPointerCapture(event.pointerId);
   };
 
-  const containerStyle: React.CSSProperties = pos
-    ? {
-        position: "fixed",
-        left: pos.x,
-        top: pos.y,
-        transform: "translate(-50%, -50%)",
-        bottom: "auto",
-      }
-    : {
-        position: "fixed",
-        bottom: "20px",
-        left: "50%",
-        transform: "translateX(-50%)",
-      };
+  const handleDragMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const activeDrag = dragState.current;
+
+    if (!activeDrag || activeDrag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+
+    setPos(
+      clampPositionToViewport({
+        left: event.clientX - activeDrag.offsetX,
+        top: event.clientY - activeDrag.offsetY,
+      })
+    );
+  };
+
+  const handleDragEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragState.current || dragState.current.pointerId !== event.pointerId) {
+      return;
+    }
+
+    dragState.current = null;
+    isDraggingRef.current = false;
+
+    // Final clamp: snap the whole bar inside the viewport after pointer release
+    setPos((current) =>
+      current && barRef.current ? clampPositionToViewport(current) : getCenteredPosition()
+    );
+  };
+
+  const containerStyle: React.CSSProperties = {
+    position: "fixed",
+    left: pos?.left ?? 0,
+    top: pos?.top ?? 0,
+    visibility: pos ? "visible" : "hidden",
+    zIndex: 50,
+    // Prevent browser touch-scroll from stealing pointer events during drag
+    touchAction: "none",
+  };
 
   const handlePlayPause = () => {
     if (ttsPlaying && !ttsPaused) {
@@ -164,16 +238,18 @@ export function FloatingControls({
   return (
     <div
       ref={barRef}
-      style={{ ...containerStyle, zIndex: 50 }}
-      className="flex flex-nowrap items-center gap-2 whitespace-nowrap rounded-full bg-white/95 px-2 py-2 shadow-[0_4px_24px_rgba(0,0,0,0.12)] backdrop-blur-md border border-gray-200/60"
+      style={containerStyle}
+      className="flex flex-nowrap items-center gap-2 whitespace-nowrap rounded-full border border-gray-200/60 bg-white/95 px-2 py-2 shadow-[0_4px_24px_rgba(0,0,0,0.12)] backdrop-blur-md"
       role="toolbar"
       aria-label="Reading controls"
+      onPointerMove={handleDragMove}
+      onPointerUp={handleDragEnd}
+      onPointerCancel={handleDragEnd}
     >
-      {/* Drag handle — compact 3x2 grip */}
+      {/* Drag handle — only initiates drag; move/up/cancel are on the bar itself after capture */}
       <div
-        className="cursor-grab active:cursor-grabbing touch-none select-none flex flex-col gap-[1.5px] px-0.5 py-0.5"
-        onMouseDown={handleDragStart}
-        onTouchStart={handleDragStart}
+        className="flex select-none flex-col gap-[1.5px] px-1 py-1 text-gray-400 cursor-grab active:cursor-grabbing"
+        onPointerDown={handleDragStart}
         aria-hidden="true"
         title="Drag to move"
       >

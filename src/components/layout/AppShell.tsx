@@ -18,7 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="relative z-10">
         <AppHeader />
         <main id="main-content" className="mx-auto max-w-5xl px-4 py-6">
-          <div className="rounded-2xl bg-white/90 backdrop-blur-sm p-6 shadow-lg shadow-black/10">
+          <div className="rounded-2xl bg-white p-6 shadow-lg shadow-black/10">
             {children}
           </div>
         </main>
