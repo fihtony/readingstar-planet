@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { useTranslations } from "next-intl";
+import { HOME_TITLE_THEME } from "./home-title-fonts";
 
 type IslandKey =
   | "island"
@@ -142,14 +143,51 @@ const ISLANDS: IslandDef[] = [
 const HOME_TITLE_STYLE: CSSProperties = {
   left: "0.8%",
   top: "0.6%",
-  fontSize: "clamp(14px, 1.45vw, 22px)",
 };
 
+/* ── Confusable-letter colors (same as the app's letter-confusion system) ── */
+const LETTER_D_COLOR = "#FF8C42";
+const LETTER_P_COLOR = "#9B8EC2";
+
+function styledTitle(
+  text: string,
+  baseColor: string,
+  shadow: string,
+  transformPattern: readonly string[],
+) {
+  return text.split("").map((ch, i) => {
+    const lower = ch.toLowerCase();
+    const isD = lower === "d";
+    const isP = lower === "p";
+    const color = isD
+      ? LETTER_D_COLOR
+      : isP
+        ? LETTER_P_COLOR
+        : baseColor;
+    return (
+      <span
+        key={i}
+        style={{
+          color,
+          display: "inline-block",
+          fontWeight: isD || isP ? 700 : undefined,
+          transform: ch === " " ? undefined : transformPattern[i % transformPattern.length],
+          textShadow: isD || isP
+            ? `0 0 8px ${isD ? LETTER_D_COLOR : LETTER_P_COLOR}44`
+            : shadow,
+        }}
+      >
+        {ch === " " ? "\u00A0" : ch}
+      </span>
+    );
+  });
+}
+
 const SETTINGS_ICON_STYLE: CSSProperties = {
-  right: "1.5%",
-  bottom: "2.6%",
-  width: "clamp(58px, 4vw, 84px)",
-  height: "clamp(58px, 4vw, 84px)",
+  left: "1.0%",
+  bottom: "1.0%",
+  width: "clamp(58px, 3vw, 84px)",
+  height: "clamp(58px, 3vw, 84px)",
   filter: "drop-shadow(0 8px 16px rgba(0,0,0,0.18))",
 };
 
@@ -223,6 +261,11 @@ const MENU_TEXT_COLORS = {
 const HOME_SCENE_WIDTH = 1380;
 const HOME_SCENE_HEIGHT = 752;
 
+const HOME_VIEWPORT_STYLE: CSSProperties = {
+  background:
+    "radial-gradient(circle at 50% 0%, rgba(72, 126, 194, 0.22), transparent 28%), linear-gradient(180deg, #1d3266 0%, #23477c 38%, #2c63a0 72%, #244c83 100%)",
+};
+
 export default function HomePage() {
   const map = useTranslations("map");
   const nav = useTranslations("nav");
@@ -237,14 +280,16 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="h-[100dvh] w-screen overflow-auto bg-[#dcefff]">
-      <div className="relative min-h-[100dvh] min-w-screen">
-        <div
-          className="home-scene-frame relative overflow-hidden bg-[#dcefff]"
-          onPointerMove={handlePointerMove}
-          onPointerLeave={resetScene}
-          onPointerCancel={resetScene}
-        >
+    <div
+      className="flex h-[100dvh] w-screen items-center justify-center overflow-hidden"
+      style={HOME_VIEWPORT_STYLE}
+    >
+      <div
+        className="home-scene-frame relative overflow-hidden bg-[#244c83]"
+        onPointerMove={handlePointerMove}
+        onPointerLeave={resetScene}
+        onPointerCancel={resetScene}
+      >
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-8%,rgba(255,255,255,0.3),transparent_26%),radial-gradient(circle_at_50%_100%,rgba(55,168,191,0.16),transparent_36%)]" />
 
           <div className="absolute inset-0">
@@ -254,21 +299,31 @@ export default function HomePage() {
               fill
               priority
               sizes="(max-width: 1400px) 100vw, 1380px"
-              className="pointer-events-none select-none object-cover"
+              className="pointer-events-none select-none object-contain"
             />
           </div>
 
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(11,33,68,0.08),transparent_20%,transparent_82%,rgba(8,37,48,0.14))]" />
 
+          {/* Final title: Hidden Ruins style */}
           <div
             className="pointer-events-none absolute z-20"
             style={HOME_TITLE_STYLE}
           >
             <span
-              className="block font-semibold uppercase tracking-[0.16em] text-white/44 drop-shadow-[0_1px_6px_rgba(0,0,0,0.18)]"
-              style={{ fontSize: HOME_TITLE_STYLE.fontSize }}
+              className={`${HOME_TITLE_THEME.className} block drop-shadow-[0_1px_6px_rgba(0,0,0,0.18)]`}
+              style={{
+                fontSize: HOME_TITLE_THEME.fontSize,
+                lineHeight: HOME_TITLE_THEME.lineHeight,
+                letterSpacing: HOME_TITLE_THEME.letterSpacing,
+              }}
             >
-              ReadingStar Plannet
+              {styledTitle(
+                "ReadingStar Planet",
+                HOME_TITLE_THEME.baseColor,
+                HOME_TITLE_THEME.shadow,
+                HOME_TITLE_THEME.transformPattern,
+              )}
             </span>
           </div>
 
@@ -323,13 +378,12 @@ export default function HomePage() {
               />
             ))}
           </div>
-        </div>
       </div>
 
       <style jsx global>{`
         .home-scene-frame {
-          width: max(100vw, calc(100dvh * ${HOME_SCENE_WIDTH} / ${HOME_SCENE_HEIGHT}));
-          height: max(100dvh, calc(100vw * ${HOME_SCENE_HEIGHT} / ${HOME_SCENE_WIDTH}));
+          width: min(100vw, calc(100dvh * ${HOME_SCENE_WIDTH} / ${HOME_SCENE_HEIGHT}));
+          height: min(100dvh, calc(100vw * ${HOME_SCENE_HEIGHT} / ${HOME_SCENE_WIDTH}));
         }
 
         @keyframes mapSparkle {
