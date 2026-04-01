@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateFile, extractTextFromPDF, titleFromFilename } from "@/lib/pdf-parser";
+import { validateFile, titleFromFilename } from "@/lib/pdf-parser";
+import { extractTextFromPDF } from "@/lib/pdf-parser.server";
 import { sanitizeTextContent } from "@/lib/text-processor";
 
 /**

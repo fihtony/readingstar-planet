@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createDocument, getDocumentById, listDocuments, searchDocuments, deleteDocument, moveDocumentToGroup, updateDocument, incrementDocumentReadCount } from "@/lib/repositories/document-repository";
 import { ensureDefaultDocumentGroup, listDocumentGroups } from "@/lib/repositories/document-group-repository";
-import { validateFile, extractTextFromPDF, extractTextFromTXT, titleFromFilename } from "@/lib/pdf-parser";
+import { validateFile, extractTextFromTXT, titleFromFilename } from "@/lib/pdf-parser";
+import { extractTextFromPDF } from "@/lib/pdf-parser.server";
 import { sanitizeTextContent } from "@/lib/text-processor";
 import { checkPermission, getClientIp } from "@/lib/permissions";
 import { getAuthContext, logAdminAudit, logUserActivity } from "@/lib/auth";

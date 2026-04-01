@@ -1,6 +1,5 @@
 /**
- * PDF text extraction utility.
- * Uses pdfjs-dist to extract text content from PDF files.
+ * File parsing helpers shared by client and server code.
  */
 
 import type { FileValidationResult, FileType } from "@/types";
@@ -53,38 +52,6 @@ export function validateFile(
   }
 
   return { valid: true, fileType };
-}
-
-/**
- * Extract text from a PDF buffer using pdfjs-dist.
- * Runs on the server side.
- */
-export async function extractTextFromPDF(
-  buffer: ArrayBuffer
-): Promise<string> {
-  // Dynamic import to avoid bundling issues on client
-  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-
-  const loadingTask = pdfjsLib.getDocument({
-    data: new Uint8Array(buffer),
-    useSystemFonts: true,
-  });
-
-  const pdf = await loadingTask.promise;
-  const textParts: string[] = [];
-
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const pageText = content.items
-      .map((item) => ("str" in item ? item.str : ""))
-      .join(" ");
-    if (pageText.trim()) {
-      textParts.push(pageText.trim());
-    }
-  }
-
-  return textParts.join("\n\n");
 }
 
 /**

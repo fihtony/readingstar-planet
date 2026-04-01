@@ -355,7 +355,7 @@ export default function LibraryPage() {
             📚 {t("title")}
           </h1>
           <p className="text-sm text-gray-500">{t("subtitle")}</p>
-          <p className="mt-1 text-xs text-gray-400">{t("groupsHint")}</p>
+          {isAdmin && <p className="mt-1 text-xs text-gray-400">{t("groupsHint")}</p>}
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && (
