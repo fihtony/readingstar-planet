@@ -11,6 +11,23 @@ ReadingStar Planet is a Next.js reading support app designed for children who be
 - Role-aware account management, profile editing, and admin-only global defaults
 - English and Chinese UI support, plus PWA support for an app-like experience
 
+## Screenshots
+
+### Homepage
+An inviting entry point into the ReadingStar planet adventure.
+
+<img src="images/homepage.png" alt="Reading Star Planet Homepage" width="800" />
+
+### Spotlight Reading
+Keep the paragraph focused by highlighting a chosen character.
+
+<img src="images/spotlight_reading.png" alt="Spotlight Reading Mode" width="800" />
+
+### Letter Detective
+Practice spotting letters that are easy to confuse.
+
+<img src="images/letter_detective.png" alt="Letter Detective Game" width="500" />
+
 ## Tech Stack
 
 - Next.js App Router

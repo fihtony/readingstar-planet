@@ -51,6 +51,7 @@
     "dragGroup": "Drag group",
     "empty": "No books yet! Upload your first book to start reading.",
     "search": "Search books...",
+    "clearSearch": "Clear search",
     "delete": "Remove",
     "deleteConfirm": "Remove this book from your shelf?",
     "readNow": "Read Now",

@@ -27,6 +27,7 @@ export default function LibraryPage() {
   const mascot = useTranslations("mascot");
   const { isAdmin, isAuthenticated } = useAuth();
   const csrfFetch = useCsrfFetch();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [groups, setGroups] = useState<DocumentGroup[]>([]);
   const [userStats, setUserStats] = useState<Record<string, UserReadingStats>>({});
@@ -314,6 +315,11 @@ export default function LibraryPage() {
       )
     : documents;
 
+  const clearSearchQuery = () => {
+    setSearchQuery("");
+    searchInputRef.current?.focus();
+  };
+
   const groupedDocuments = groups.length > 0
     ? groups.map((group) => ({
         group,
@@ -405,15 +411,32 @@ export default function LibraryPage() {
 
       {documents.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="text"
-            placeholder={`🔍 ${t("search")}`}
-            className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 text-slate-700 shadow-sm focus:border-sky-300 focus:outline-none"
+          <div
+            className="relative w-full"
             style={{ minHeight: "var(--min-touch-target)", width: "30rem", maxWidth: "100%" }}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label={t("search")}
-          />
+          >
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder={`🔍 ${t("search")}`}
+              className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3 pr-12 text-slate-700 shadow-sm focus:border-sky-300 focus:outline-none"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label={t("search")}
+            />
+            {searchQuery.length > 0 ? (
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={clearSearchQuery}
+                aria-label={t("clearSearch")}
+                title={t("clearSearch")}
+              >
+                ✕
+              </button>
+            ) : null}
+          </div>
           <div className="flex items-center gap-1 ml-auto flex-wrap">
             <span className="text-xs text-gray-400 mr-1">{t("sortBy")}:</span>
             {sortFields.map((field) => (
@@ -467,24 +490,26 @@ export default function LibraryPage() {
             }}
           >
             <div className="mb-4 flex items-center justify-between gap-3">
-              <div
-                draggable={isAdmin && group.id !== "fallback-group"}
-                onDragStart={() => {
-                  if (!isAdmin || group.id === "fallback-group") {
-                    return;
-                  }
-                  setDraggingGroupId(group.id);
-                  setDraggingDocumentId(null);
-                }}
-                onDragEnd={() => {
-                  setDraggingGroupId(null);
-                  setDropGroupId(null);
-                }}
-                className={`flex items-center gap-3 min-w-0 flex-1 ${!isAdmin || group.id === "fallback-group" ? "cursor-default" : "cursor-grab active:cursor-grabbing"}`}
-                aria-label={t("dragGroup")}
-                title={t("dragGroup")}
-              >
-                {isAdmin && <span className="flex-shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500">⋮⋮</span>}
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                {isAdmin && group.id !== "fallback-group" ? (
+                  <button
+                    type="button"
+                    draggable
+                    onDragStart={() => {
+                      setDraggingGroupId(group.id);
+                      setDraggingDocumentId(null);
+                    }}
+                    onDragEnd={() => {
+                      setDraggingGroupId(null);
+                      setDropGroupId(null);
+                    }}
+                    className="flex-shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500 cursor-grab active:cursor-grabbing"
+                    aria-label={t("dragGroup")}
+                    title={t("dragGroup")}
+                  >
+                    ⋮⋮
+                  </button>
+                ) : null}
                 <div className="min-w-0 flex-1">
                   {editingGroupId === group.id ? (
                     <div

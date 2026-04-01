@@ -51,6 +51,7 @@
     "dragGroup": "拖动分组",
     "empty": "还没有书呢！上传你的第一本书开始阅读吧。",
     "search": "搜索书籍...",
+    "clearSearch": "清空搜索",
     "delete": "移除",
     "deleteConfirm": "要把这本书从书架上移除吗？",
     "readNow": "开始阅读",

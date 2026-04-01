@@ -23,6 +23,7 @@ const CLAUSE_STARTERS = new Set([
   "you",
   "we",
   "they",
+  "but",
   "he",
   "she",
   "it",
@@ -40,6 +41,44 @@ const CLAUSE_STARTERS = new Set([
   "his",
   "her",
 ]);
+
+const NON_TERMINAL_HONORIFICS = new Set([
+  "mr",
+  "mrs",
+  "ms",
+  "dr",
+  "prof",
+]);
+
+const COMMON_SENTENCE_STARTERS = new Set([
+  "a",
+  "an",
+  "and",
+  "but",
+  "he",
+  "how",
+  "i",
+  "it",
+  "she",
+  "so",
+  "that",
+  "the",
+  "there",
+  "these",
+  "they",
+  "this",
+  "those",
+  "we",
+  "what",
+  "when",
+  "where",
+  "who",
+  "why",
+  "you",
+  "yet",
+]);
+
+const PROTECTED_PERIOD_TOKEN = "__READING_HONORIFIC_DOT__";
 
 /**
  * Split text content into individual lines for line-by-line reading.
@@ -279,12 +318,36 @@ function normalizeParagraphLines(block: RawParagraphBlock): string {
 }
 
 function splitIntoSemanticSegments(paragraph: string): string[] {
-  const sentenceCandidates = paragraph
+  const protectedParagraph = protectNonTerminalAbbreviations(paragraph);
+  const sentenceCandidates = protectedParagraph
     .match(/[^.!?]+(?:[.!?]+["')\]\u201C\u201D\u2018\u2019]*)?|.+$/g)
-    ?.map((segment) => segment.trim())
+    ?.map((segment) => restoreProtectedAbbreviations(segment.trim()))
     .filter(Boolean) ?? [];
 
   return sentenceCandidates.flatMap((sentence) => splitCommaClause(sentence));
+}
+
+function protectNonTerminalAbbreviations(text: string): string {
+  return text.replace(/\b([A-Za-z]+)\./g, (match, honorific, offset, source) => {
+    if (!NON_TERMINAL_HONORIFICS.has(honorific.toLowerCase())) {
+      return match;
+    }
+
+    const nextWord = source
+      .slice(offset + match.length)
+      .match(/^\s+["'(]*([A-Z][A-Za-z'-]*)/)?.[1]
+      ?.toLowerCase();
+
+    if (!nextWord || COMMON_SENTENCE_STARTERS.has(nextWord)) {
+      return match;
+    }
+
+    return `${honorific}${PROTECTED_PERIOD_TOKEN}`;
+  });
+}
+
+function restoreProtectedAbbreviations(text: string): string {
+  return text.replace(new RegExp(PROTECTED_PERIOD_TOKEN, "g"), ".");
 }
 
 function splitCommaClause(sentence: string): string[] {

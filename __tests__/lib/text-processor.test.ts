@@ -178,5 +178,38 @@ describe("text-processor", () => {
         "When the soccer player kicks the ball, kinetic energy is at work there, too.",
       ]);
     });
+
+    describe("honorific regressions", () => {
+      it.each([
+        {
+          name: "keeps appositive descriptions attached to honorific names",
+          input:
+            "Every Friday, Mr. Jefferson, the math teacher, held a contest for his students.",
+          expected: [
+            "Every Friday, Mr. Jefferson, the math teacher, held a contest for his students.",
+          ],
+        },
+        {
+          name: "splits coordinated clauses after an honorific name",
+          input:
+            "Mr. Jefferson challenged them with problem after problem, but both students continued to answer correctly every time.",
+          expected: [
+            "Mr. Jefferson challenged them with problem after problem,",
+            "but both students continued to answer correctly every time.",
+          ],
+        },
+        {
+          name: "protects other common honorifics before names",
+          input:
+            "Dr. Rivera explained the answer carefully, but the class still wanted another example.",
+          expected: [
+            "Dr. Rivera explained the answer carefully,",
+            "but the class still wanted another example.",
+          ],
+        },
+      ])("handles $name", ({ input, expected }) => {
+        expect(parseReadingContent(input).lines).toEqual(expected);
+      });
+    });
   });
 });
