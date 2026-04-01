@@ -208,4 +208,45 @@ describe("Google OAuth callback integration", () => {
     expect(sessionCount).toBe(0);
     expect(cookieStore.get("rs_session")).toBeUndefined();
   });
+
+  it("redirects to the configured production origin after login", async () => {
+    vi.stubEnv(
+      "GOOGLE_REDIRECT_URI",
+      "https://reading.tarch.ca/api/auth/google/callback"
+    );
+
+    testDb
+      .prepare(
+        `INSERT INTO app_metadata (key, value, updated_at)
+         VALUES ('registration_policy', 'open', datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value = 'open', updated_at = datetime('now')`
+      )
+      .run();
+
+    googleMocks.verifyIdToken.mockResolvedValue({
+      getPayload: () => ({
+        sub: "google-user-4",
+        email: "production.student@example.com",
+        name: "Production Student",
+        picture: "https://example.com/production.png",
+      }),
+    });
+
+    const { route } = await loadRouteModules();
+
+    const request = new NextRequest(
+      "http://localhost:3000/api/auth/google/callback?code=test-code",
+      {
+        headers: {
+          "user-agent": "Mozilla/5.0 Chrome/136.0",
+          "x-real-ip": "127.0.0.1",
+        },
+      }
+    );
+
+    const response = await route.GET(request);
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://reading.tarch.ca/library");
+  });
 });

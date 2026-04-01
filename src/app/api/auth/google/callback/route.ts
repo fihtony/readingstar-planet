@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth";
 import { createUser, updateUser } from "@/lib/repositories/user-repository";
 import { getClientIp } from "@/lib/permissions";
+import { getAppUrl } from "@/lib/app-url";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? "";
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
 
   const code = request.nextUrl.searchParams.get("code");
   if (!code) {
-    return NextResponse.redirect(new URL("/library", request.url));
+    return NextResponse.redirect(getAppUrl(request, "/library"));
   }
 
   try {
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     const payload = ticket.getPayload();
     if (!payload || !payload.sub || !payload.email) {
-      return NextResponse.redirect(new URL("/library?error=auth_failed", request.url));
+      return NextResponse.redirect(getAppUrl(request, "/library?error=auth_failed"));
     }
 
     const googleId = payload.sub;
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
       // New user
       if (policy === "invite-only") {
         return NextResponse.redirect(
-          new URL("/library?error=invite_only", request.url)
+          getAppUrl(request, "/library?error=invite_only")
         );
       }
 
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest) {
       // Existing user – check status
       if (user.status === "deleted" || user.status === "inactive") {
         return NextResponse.redirect(
-          new URL("/library?error=account_disabled", request.url)
+          getAppUrl(request, "/library?error=account_disabled")
         );
       }
 
@@ -135,11 +136,11 @@ export async function GET(request: NextRequest) {
     // Update last_login_at
     updateUser(user.id, { lastLoginAt: new Date().toISOString() });
 
-    return NextResponse.redirect(new URL("/library", request.url));
+    return NextResponse.redirect(getAppUrl(request, "/library"));
   } catch (error) {
     console.error("OAuth callback error:", error);
     return NextResponse.redirect(
-      new URL("/library?error=auth_failed", request.url)
+      getAppUrl(request, "/library?error=auth_failed")
     );
   }
 }

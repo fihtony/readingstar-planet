@@ -5,6 +5,7 @@ import {
   getUserByEmail,
   setSessionCookie,
 } from "@/lib/auth";
+import { getAppUrl } from "@/lib/app-url";
 import { getClientIp } from "@/lib/permissions";
 import { createUser, updateUser } from "@/lib/repositories/user-repository";
 import type { User, UserRole, UserStatus } from "@/types";
@@ -152,7 +153,7 @@ export async function GET(request: NextRequest) {
     return result;
   }
 
-  return NextResponse.redirect(new URL(input.redirectTo ?? "/library", request.url));
+  return NextResponse.redirect(getAppUrl(request, input.redirectTo ?? "/library"));
 }
 
 export async function POST(request: NextRequest) {
