@@ -3,6 +3,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { TTSState } from "@/types";
 
+type WordBoundary = {
+  text: string;
+  start: number;
+  end: number;
+};
+
 interface UseTTSOptions {
   speed?: number;
   pitch?: number;
@@ -64,6 +70,54 @@ function pickBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
   return voices.find((v) => v.default) ?? voices[0];
 }
 
+function buildWordBoundaries(text: string): WordBoundary[] {
+  const boundaries: WordBoundary[] = [];
+  const matcher = /\S+/g;
+
+  for (let match = matcher.exec(text); match; match = matcher.exec(text)) {
+    boundaries.push({
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    });
+  }
+
+  return boundaries;
+}
+
+function getWordIndexFromCharIndex(charIndex: number, boundaries: WordBoundary[]) {
+  if (boundaries.length === 0) {
+    return -1;
+  }
+
+  for (let index = 0; index < boundaries.length; index += 1) {
+    const boundary = boundaries[index];
+
+    if (charIndex < boundary.start) {
+      return Math.max(0, index - 1);
+    }
+
+    if (charIndex < boundary.end) {
+      return index;
+    }
+  }
+
+  return boundaries.length - 1;
+}
+
+function getEstimatedWordDelay(word: string, rate: number) {
+  const normalizedRate = Math.max(rate, 0.5);
+  const wordLength = word.replace(/[^\p{L}\p{N}'’-]/gu, "").length;
+  const punctuationPause = /[.!?]["')\]]*$/.test(word)
+    ? 220
+    : /[,;:]["')\]]*$/.test(word)
+      ? 120
+      : 0;
+  const baseDelay = 250 + Math.min(wordLength, 12) * 32 + punctuationPause;
+
+  return Math.max(150, Math.round(baseDelay / normalizedRate));
+}
+
 export function useTTS({
   speed = 0.8,
   pitch = 1.05,
@@ -82,16 +136,23 @@ export function useTTS({
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const wordsRef = useRef<string[]>([]);
+  const wordBoundariesRef = useRef<WordBoundary[]>([]);
   const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
   const speedRef = useRef(speed);
   const pitchRef = useRef(pitch);
   const voiceNameRef = useRef(voiceName);
+  const currentWordIndexRef = useRef(-1);
+  const wordTrackingTimeoutRef = useRef<number | null>(null);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   // Keep refs in sync so the speak callback always uses latest values
   useEffect(() => {
     speedRef.current = state.speed;
   }, [state.speed]);
+
+  useEffect(() => {
+    currentWordIndexRef.current = state.currentWordIndex;
+  }, [state.currentWordIndex]);
 
   useEffect(() => {
     pitchRef.current = pitch;
@@ -132,15 +193,72 @@ export function useTTS({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if (wordTrackingTimeoutRef.current !== null) {
+        window.clearTimeout(wordTrackingTimeoutRef.current);
+      }
       window.speechSynthesis?.cancel();
     };
   }, []);
+
+  const clearWordTrackingTimeout = useCallback(() => {
+    if (wordTrackingTimeoutRef.current !== null) {
+      window.clearTimeout(wordTrackingTimeoutRef.current);
+      wordTrackingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const updateCurrentWordIndex = useCallback(
+    (wordIndex: number) => {
+      if (wordIndex < 0) {
+        return;
+      }
+
+      currentWordIndexRef.current = wordIndex;
+      setState((prev) => {
+        if (prev.currentWordIndex === wordIndex) {
+          return prev;
+        }
+
+        return { ...prev, currentWordIndex: wordIndex };
+      });
+      onWordChange?.(wordIndex);
+    },
+    [onWordChange]
+  );
+
+  const scheduleWordTrackingFallback = useCallback(
+    (wordIndex: number) => {
+      clearWordTrackingTimeout();
+
+      const boundaries = wordBoundariesRef.current;
+      const nextIndex = wordIndex + 1;
+      if (!utteranceRef.current || nextIndex >= boundaries.length) {
+        return;
+      }
+
+      const delay = getEstimatedWordDelay(
+        boundaries[wordIndex]?.text ?? boundaries[nextIndex].text,
+        speedRef.current
+      );
+
+      wordTrackingTimeoutRef.current = window.setTimeout(() => {
+        if (!utteranceRef.current || window.speechSynthesis?.paused) {
+          return;
+        }
+
+        updateCurrentWordIndex(nextIndex);
+        scheduleWordTrackingFallback(nextIndex);
+      }, delay);
+    },
+    [clearWordTrackingTimeout, updateCurrentWordIndex]
+  );
 
   const speak = useCallback(
     (text: string, words?: string[]) => {
       if (!window.speechSynthesis) return;
 
       // Cancel any ongoing speech
+      clearWordTrackingTimeout();
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
@@ -159,30 +277,30 @@ export function useTTS({
         utterance.voice = voiceRef.current;
       }
 
-      if (words) {
-        wordsRef.current = words;
-      }
+      wordBoundariesRef.current = buildWordBoundaries(text);
+      wordsRef.current =
+        words && words.length > 0
+          ? words
+          : wordBoundariesRef.current.map((boundary) => boundary.text);
 
       utterance.onboundary = (event) => {
-        if (event.name === "word") {
-          // Estimate word index from char offset
-          const charIndex = event.charIndex;
-          let wordIdx = 0;
-          let pos = 0;
-          for (let i = 0; i < wordsRef.current.length; i++) {
-            if (pos >= charIndex) {
-              wordIdx = i;
-              break;
-            }
-            pos += wordsRef.current[i].length + 1; // +1 for space
-            wordIdx = i;
+        if (typeof event.charIndex === "number") {
+          const wordIdx = getWordIndexFromCharIndex(
+            event.charIndex,
+            wordBoundariesRef.current
+          );
+
+          if (wordIdx >= 0) {
+            updateCurrentWordIndex(wordIdx);
+            scheduleWordTrackingFallback(wordIdx);
           }
-          setState((prev) => ({ ...prev, currentWordIndex: wordIdx }));
-          onWordChange?.(wordIdx);
         }
       };
 
       utterance.onend = () => {
+        clearWordTrackingTimeout();
+        utteranceRef.current = null;
+        currentWordIndexRef.current = -1;
         setState((prev) => ({
           ...prev,
           isPlaying: false,
@@ -194,31 +312,44 @@ export function useTTS({
       };
 
       utteranceRef.current = utterance;
+      currentWordIndexRef.current = wordBoundariesRef.current.length > 0 ? 0 : -1;
       setState((prev) => ({
         ...prev,
         isPlaying: true,
         isPaused: false,
-        currentWordIndex: 0,
+        currentWordIndex: wordBoundariesRef.current.length > 0 ? 0 : -1,
         utterance,
       }));
 
       window.speechSynthesis.speak(utterance);
+
+      if (wordBoundariesRef.current.length > 0) {
+        scheduleWordTrackingFallback(0);
+      }
     },
-    [onWordChange, onEnd]
+    [clearWordTrackingTimeout, onEnd, scheduleWordTrackingFallback, updateCurrentWordIndex]
   );
 
   const pause = useCallback(() => {
+    clearWordTrackingTimeout();
     window.speechSynthesis?.pause();
     setState((prev) => ({ ...prev, isPaused: true }));
-  }, []);
+  }, [clearWordTrackingTimeout]);
 
   const resume = useCallback(() => {
     window.speechSynthesis?.resume();
     setState((prev) => ({ ...prev, isPaused: false }));
-  }, []);
+
+    if (utteranceRef.current && currentWordIndexRef.current >= 0) {
+      scheduleWordTrackingFallback(currentWordIndexRef.current);
+    }
+  }, [scheduleWordTrackingFallback]);
 
   const stop = useCallback(() => {
+    clearWordTrackingTimeout();
     window.speechSynthesis?.cancel();
+    utteranceRef.current = null;
+    currentWordIndexRef.current = -1;
     setState((prev) => ({
       ...prev,
       isPlaying: false,
@@ -226,7 +357,7 @@ export function useTTS({
       currentWordIndex: -1,
       utterance: null,
     }));
-  }, []);
+  }, [clearWordTrackingTimeout]);
 
   const setSpeed = useCallback((newSpeed: number) => {
     const clamped = Math.max(0.5, Math.min(newSpeed, 2.0));
