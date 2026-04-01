@@ -211,8 +211,7 @@ export default function ProfilePage() {
         <section className="rounded-2xl border-2 border-gray-100 bg-white p-6">
           <h2 className="mb-3 text-lg font-bold">⚠️ Account</h2>
           <p className="mb-3 text-sm text-gray-600">
-            Deleting your account performs a soft delete, signs you out immediately, and requires
-            an administrator to restore access.
+            Deleting your account signs you out immediately, and you can't access the system anymore.
           </p>
           {accountError && <p className="mb-3 text-sm text-orange-600">{accountError}</p>}
           {!showDeleteConfirm ? (

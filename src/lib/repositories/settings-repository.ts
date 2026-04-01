@@ -49,6 +49,14 @@ function rowToSettings(row: SettingsRow): UserSettings {
   };
 }
 
+function getGlobalFontFamily(db: ReturnType<typeof getDatabase>): FontFamily {
+  const row = db
+    .prepare("SELECT value FROM app_metadata WHERE key = ?")
+    .get("default_font_family") as { value: string } | undefined;
+
+  return row?.value === "system" ? "system" : "opendyslexic";
+}
+
 export function getOrCreateUserSettings(userId: string): UserSettings {
   const db = getDatabase();
   const existing = db
@@ -56,7 +64,10 @@ export function getOrCreateUserSettings(userId: string): UserSettings {
     .get(userId) as SettingsRow | undefined;
 
   if (existing) {
-    return rowToSettings(existing);
+    return {
+      ...rowToSettings(existing),
+      fontFamily: getGlobalFontFamily(db),
+    };
   }
 
   // Read global defaults from app_metadata so the new user inherits whatever
@@ -116,9 +127,11 @@ export function updateUserSettings(
 ): UserSettings {
   const db = getDatabase();
   const current = getOrCreateUserSettings(userId);
+  const { fontFamily: _ignoredFontFamily, ...personalUpdates } = updates;
   const next: UserSettings = {
     ...current,
-    ...updates,
+    ...personalUpdates,
+    fontFamily: getGlobalFontFamily(db),
     updatedAt: new Date().toISOString(),
   };
 

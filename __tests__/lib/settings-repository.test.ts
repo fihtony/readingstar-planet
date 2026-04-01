@@ -54,12 +54,28 @@ describe("settings-repository", () => {
     });
 
     const fetched = getOrCreateUserSettings("default-user");
-    expect(updated.fontFamily).toBe("system");
+    expect(updated.fontFamily).toBe("opendyslexic");
     expect(fetched.fontSize).toBe(28);
     expect(fetched.lineSpacing).toBe(2);
     expect(fetched.maskOpacity).toBe(0.4);
     expect(fetched.ttsSpeed).toBe(1.2);
     expect(fetched.theme).toBe("magnifier");
+  });
+
+  it("always uses the global font family for existing users", () => {
+    updateUserSettings("default-user", {
+      fontFamily: "system",
+      fontSize: 24,
+    });
+
+    testDb
+      .prepare(`UPDATE app_metadata SET value = ? WHERE key = ?`)
+      .run("system", "default_font_family");
+
+    const fetched = getOrCreateUserSettings("default-user");
+
+    expect(fetched.fontFamily).toBe("system");
+    expect(fetched.fontSize).toBe(24);
   });
 
   it("inherits admin-configured global defaults when creating settings for a new user (TP-SET-01)", () => {

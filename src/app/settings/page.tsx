@@ -300,25 +300,6 @@ export default function SettingsPage() {
       <SettingsSection title={`🎨 ${t("display")}`}>
         <div className="flex flex-col gap-5">
           <div>
-            <label className="mb-2 block text-sm font-medium">Font Family</label>
-            <div className="flex gap-2 flex-wrap">
-              {FONT_FAMILY_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  className={`btn-kid rounded-xl px-4 py-2 text-sm ${
-                    settings.fontFamily === option.value
-                      ? "border-2 border-sky-300 bg-sky-100 text-sky-700"
-                      : "border-2 border-gray-200 bg-gray-50 text-gray-600"
-                  }`}
-                  onClick={() => void updateSetting("fontFamily", option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
             <label className="mb-2 block text-sm font-medium">
               {readingT("settings.fontSize")}: {settings.fontSize}px
             </label>
