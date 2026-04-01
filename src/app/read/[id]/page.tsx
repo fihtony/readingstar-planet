@@ -530,6 +530,7 @@ export default function ReadPage() {
         onFollowAlongStart={followAlong.start}
         onFollowAlongStop={followAlong.stop}
         followAlongSupported={followAlong.isSupported}
+        followAlongErrorCode={followAlong.errorCode}
       />
 
       {/* Slide-out settings panel from right */}

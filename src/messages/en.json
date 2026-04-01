@@ -122,7 +122,12 @@
       "pause": "Pause",
       "stop": "Stop",
       "speed": "Speed",
-      "followAlong": "Follow Along"
+      "followAlong": "Follow Along",
+      "followAlongInsecureContext": "Voice input only works on HTTPS sites or on localhost.",
+      "followAlongPermissionDenied": "Microphone access is blocked. Allow microphone access for this site and try again.",
+      "followAlongNoMicrophone": "No microphone is available for voice input.",
+      "followAlongServiceUnavailable": "Speech recognition is unavailable right now in this browser.",
+      "followAlongStartError": "Voice input could not start. Check browser permissions and try again."
     },
     "settings": {
       "fontSize": "Text Size",
