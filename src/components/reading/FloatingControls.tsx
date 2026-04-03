@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { splitIntoWords } from "@/lib/text-processor";
 
 /* ------------------------------------------------------------------ */
@@ -44,6 +45,7 @@ interface FloatingControlsProps {
   onFollowAlongStart: () => void;
   onFollowAlongStop: () => void;
   followAlongSupported: boolean;
+  followAlongErrorCode: FollowAlongErrorCode | null;
 }
 
 export function FloatingControls({
@@ -59,11 +61,25 @@ export function FloatingControls({
   onFollowAlongStart,
   onFollowAlongStop,
   followAlongSupported,
+  followAlongErrorCode,
 }: FloatingControlsProps) {
+  const t = useTranslations("reading.tts");
   const [pos, setPos] = useState<FloatingPosition | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const dragState = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const isDraggingRef = useRef(false);
+  const followAlongErrorMessage =
+    followAlongErrorCode === "insecure-context"
+      ? t("followAlongInsecureContext")
+      : followAlongErrorCode === "permission-denied"
+        ? t("followAlongPermissionDenied")
+        : followAlongErrorCode === "no-microphone"
+          ? t("followAlongNoMicrophone")
+          : followAlongErrorCode === "service-unavailable"
+            ? t("followAlongServiceUnavailable")
+            : followAlongErrorCode === "start-failed"
+              ? t("followAlongStartError")
+              : null;
 
   const clampPositionToViewport = useCallback((nextPos: FloatingPosition) => {
     if (!barRef.current) {
@@ -239,7 +255,7 @@ export function FloatingControls({
     <div
       ref={barRef}
       style={containerStyle}
-      className="flex flex-nowrap items-center gap-2 whitespace-nowrap rounded-full border border-gray-200/60 bg-white/95 px-2 py-2 shadow-[0_4px_24px_rgba(0,0,0,0.12)] backdrop-blur-md"
+      className="relative flex flex-nowrap items-center gap-2 whitespace-nowrap rounded-full border border-gray-200/60 bg-white/95 px-2 py-2 shadow-[0_4px_24px_rgba(0,0,0,0.12)] backdrop-blur-md"
       role="toolbar"
       aria-label="Reading controls"
       onPointerMove={handleDragMove}
@@ -334,6 +350,16 @@ export function FloatingControls({
           {followAlongActive ? "⏹ Stop" : "🎙 Read Aloud"}
         </button>
       )}
+
+      {followAlongSupported && followAlongErrorMessage ? (
+        <div
+          className="absolute left-1/2 top-full mt-2 w-max max-w-[min(24rem,calc(100vw-2rem))] -translate-x-1/2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-medium text-amber-900 shadow-md whitespace-normal"
+          role="status"
+          aria-live="polite"
+        >
+          {followAlongErrorMessage}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -500,10 +526,18 @@ type SpeechRecognitionLike = {
   interimResults: boolean;
   maxAlternatives: number;
   onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
 };
+
+export type FollowAlongErrorCode =
+  | "insecure-context"
+  | "permission-denied"
+  | "no-microphone"
+  | "service-unavailable"
+  | "start-failed";
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
@@ -514,6 +548,20 @@ function getSpeechRecognitionConstructor(): SpeechRecognitionConstructor | null 
     webkitSpeechRecognition?: SpeechRecognitionConstructor;
   };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
+function resolveFollowAlongErrorCode(error?: string): FollowAlongErrorCode {
+  switch (error) {
+    case "not-allowed":
+    case "service-not-allowed":
+      return "permission-denied";
+    case "audio-capture":
+      return "no-microphone";
+    case "network":
+      return "service-unavailable";
+    default:
+      return "start-failed";
+  }
 }
 
 function scoreTranscript(expected: string, actual: string): number {
@@ -537,6 +585,7 @@ export function useFollowAlong(expectedText: string) {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [score, setScore] = useState<number | null>(null);
+  const [errorCode, setErrorCode] = useState<FollowAlongErrorCode | null>(null);
   const RecognitionCtor = useMemo(() => getSpeechRecognitionConstructor(), []);
   const isSupported = Boolean(RecognitionCtor);
 
@@ -544,10 +593,17 @@ export function useFollowAlong(expectedText: string) {
   useEffect(() => {
     setTranscript("");
     setScore(null);
+    setErrorCode(null);
   }, [expectedText]);
 
   const start = () => {
     if (!RecognitionCtor || isListening) return;
+
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      setErrorCode("insecure-context");
+      return;
+    }
+
     const recognition = new RecognitionCtor();
     recognition.lang = "en-US";
     recognition.interimResults = false;
@@ -557,12 +613,23 @@ export function useFollowAlong(expectedText: string) {
       setTranscript(t);
       setScore(scoreTranscript(expectedText, t));
     };
+    recognition.onerror = (event) => {
+      setIsListening(false);
+      setErrorCode(resolveFollowAlongErrorCode(event.error));
+    };
     recognition.onend = () => setIsListening(false);
     recognitionRef.current = recognition;
     setTranscript("");
     setScore(null);
+    setErrorCode(null);
     setIsListening(true);
-    recognition.start();
+
+    try {
+      recognition.start();
+    } catch {
+      setIsListening(false);
+      setErrorCode("start-failed");
+    }
   };
 
   const stop = () => {
@@ -570,5 +637,5 @@ export function useFollowAlong(expectedText: string) {
     setIsListening(false);
   };
 
-  return { isListening, transcript, score, isSupported, start, stop };
+  return { isListening, transcript, score, isSupported, errorCode, start, stop };
 }

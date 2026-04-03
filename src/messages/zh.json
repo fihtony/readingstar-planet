@@ -122,7 +122,12 @@
       "pause": "暂停",
       "stop": "停止",
       "speed": "速度",
-      "followAlong": "跟读"
+      "followAlong": "跟读",
+      "followAlongInsecureContext": "语音跟读只支持 HTTPS 站点或 localhost。",
+      "followAlongPermissionDenied": "麦克风权限被阻止了。请在浏览器站点权限中允许麦克风后再试。",
+      "followAlongNoMicrophone": "当前没有可用的麦克风设备。",
+      "followAlongServiceUnavailable": "这个浏览器当前无法使用语音识别。",
+      "followAlongStartError": "语音跟读无法启动。请检查浏览器权限后再试。"
     },
     "settings": {
       "fontSize": "文字大小",

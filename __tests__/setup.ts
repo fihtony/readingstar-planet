@@ -66,9 +66,11 @@ class MockSpeechSynthesisUtterance {
   text: string;
   lang: string = "en-US";
   rate: number = 1;
+  pitch: number = 1;
+  voice: SpeechSynthesisVoice | null = null;
   onend: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  onboundary: (() => void) | null = null;
+  onerror: ((event?: { error?: string }) => void) | null = null;
+  onboundary: ((event: { charIndex: number; name?: string }) => void) | null = null;
   addEventListener = vi.fn();
   removeEventListener = vi.fn();
   constructor(text?: string) {
