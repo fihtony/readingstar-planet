@@ -191,10 +191,10 @@ const LETTER_BAY_HIGHLIGHT_STYLE: CSSProperties = {
 };
 
 const SPOTLIGHT_ISLAND_HIGHLIGHT_STYLE: CSSProperties = {
-  left: "35.35%",
-  top: "23.2%",
-  width: "37.9%",
-  height: "42.8%",
+  left: "36.6%",
+  top: "28.4%",
+  width: "32.9%",
+  height: "36.2%",
 };
 
 const ECHO_VALLEY_HIGHLIGHT_STYLE: CSSProperties = {
@@ -392,7 +392,7 @@ function IslandOverlay({
         : isBay
           ? "/images/letter_bay_lit.png"
           : isIsland
-            ? "/images/spotlight_island_lit.png"
+            ? "/images/spotlight_island_lit5.png"
             : isValley
               ? "/images/echo_valley_lit.png"
               : "/images/shelf_bay_lit.png";
