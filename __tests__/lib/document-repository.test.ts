@@ -154,6 +154,7 @@ describe("document-repository", () => {
       userId: "user-1",
       name: "Admin Shelf",
     });
+    setDocumentGroupVisibility(sourceGroup.id, "public", []);
     setDocumentGroupVisibility(targetGroup.id, "admin_only", []);
 
     const doc = createDocument({
