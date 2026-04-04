@@ -71,6 +71,15 @@ describe("useTTS", () => {
     const { result } = renderHook(() => useTTS({ speed: 1 }));
 
     act(() => result.current.speak("Read aloud now", ["Read", "aloud", "now"]));
+
+    const utterance = vi.mocked(speechSynthesis.speak).mock.calls[0]?.[0] as {
+      onstart: (() => void) | null;
+    };
+
+    // Simulate the voice engine starting (fires after a brief loading delay).
+    act(() => {
+      utterance.onstart?.();
+    });
     expect(result.current.currentWordIndex).toBe(0);
 
     act(() => {

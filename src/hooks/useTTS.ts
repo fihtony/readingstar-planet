@@ -336,7 +336,19 @@ export function useTTS({
       // Build absolute word schedule and reset adaptive correction for fresh utterance
       speechRateCorrectionRef.current = 1.0;
       wordScheduleRef.current = buildWordSchedule(wordBoundariesRef.current, speedRef.current);
-      utteranceStartTimeRef.current = Date.now();
+      // utteranceStartTimeRef is set in onstart so the schedule is anchored to
+      // when the voice actually begins, not when speak() is called. This prevents
+      // the word cursor from advancing before speech starts (loading delay).
+
+      utterance.onstart = () => {
+        // Anchor the schedule to the moment speech actually begins.
+        utteranceStartTimeRef.current = Date.now();
+        // Now highlight the first word and start the timer-based fallback.
+        if (wordBoundariesRef.current.length > 0) {
+          updateCurrentWordIndex(0);
+          scheduleWordTrackingFallback(0);
+        }
+      };
 
       utterance.onboundary = (event) => {
         if (typeof event.charIndex !== "number") return;
@@ -405,20 +417,16 @@ export function useTTS({
       };
 
       utteranceRef.current = utterance;
-      currentWordIndexRef.current = wordBoundariesRef.current.length > 0 ? 0 : -1;
+      currentWordIndexRef.current = -1;
       setState((prev) => ({
         ...prev,
         isPlaying: true,
         isPaused: false,
-        currentWordIndex: wordBoundariesRef.current.length > 0 ? 0 : -1,
+        currentWordIndex: -1,
         utterance,
       }));
 
       window.speechSynthesis.speak(utterance);
-
-      if (wordBoundariesRef.current.length > 0) {
-        scheduleWordTrackingFallback(0);
-      }
     },
     [clearWordTrackingTimeout, onEnd, scheduleWordTrackingFallback, updateCurrentWordIndex]
   );

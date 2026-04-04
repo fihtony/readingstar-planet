@@ -28,7 +28,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/auth", () => ({
-  getAuthContext: getAuthContextMock,
+  getReadOnlyAuthContext: getAuthContextMock,
 }));
 
 vi.mock("@/lib/repositories/document-repository", () => ({

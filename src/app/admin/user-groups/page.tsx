@@ -63,6 +63,9 @@ export default function AdminUserGroupsPage() {
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
   const [addLoading, setAddLoading] = useState(false);
 
+  // Remove member confirmation
+  const [confirmRemoveMember, setConfirmRemoveMember] = useState<GroupMember | null>(null);
+
   // Delete confirmation
   const [deletingGroup, setDeletingGroup] = useState<UserGroup | null>(null);
   const [deleteForce, setDeleteForce] = useState(false);
@@ -254,6 +257,7 @@ export default function AdminUserGroupsPage() {
         { method: "DELETE" }
       );
       if (res.ok) {
+        setConfirmRemoveMember(null);
         await fetchMembers(selectedGroup.id);
         await fetchGroups();
       }
@@ -602,7 +606,7 @@ export default function AdminUserGroupsPage() {
                           <button
                             type="button"
                             className="rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-50"
-                            onClick={() => handleRemoveMember(member.id)}
+                            onClick={() => setConfirmRemoveMember(member)}
                           >
                             Remove
                           </button>
@@ -713,6 +717,33 @@ export default function AdminUserGroupsPage() {
         </div>
       )}
 
+      {/* Remove member confirmation modal */}
+      {confirmRemoveMember && selectedGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="mb-2 text-lg font-bold text-red-600">Remove Member</h2>
+            <p className="mb-4 text-sm text-gray-600">
+              Remove{" "}
+              <span className="font-medium">
+                {confirmRemoveMember.nickname || confirmRemoveMember.name || confirmRemoveMember.email}
+              </span>{" "}
+              from &quot;{selectedGroup.name}&quot;?
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => handleRemoveMember(confirmRemoveMember.id)}
+              >
+                Remove
+              </Button>
+              <Button variant="ghost" onClick={() => setConfirmRemoveMember(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add members modal */}
       {showAddMembers && selectedGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -753,11 +784,13 @@ export default function AdminUserGroupsPage() {
                 onChange={(e) => setCandidateGroupFilter(e.target.value)}
               >
                 <option value="">All user groups</option>
-                {groups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
+                {groups
+                  .filter((group) => group.id !== selectedGroup.id)
+                  .map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  ))}
               </select>
             </div>
             <div className="max-h-72 overflow-y-auto rounded-lg border border-gray-100">
@@ -766,34 +799,66 @@ export default function AdminUserGroupsPage() {
                   No eligible users to add.
                 </div>
               ) : (
-                candidates.map((c) => (
-                  <label
-                    key={c.id}
-                    className="flex cursor-pointer items-center gap-3 border-b border-gray-50 px-4 py-2 hover:bg-gray-50"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedCandidateIds.has(c.id)}
-                      onChange={(e) => {
-                        setSelectedCandidateIds((prev) => {
-                          const next = new Set(prev);
-                          if (e.target.checked) {
-                            next.add(c.id);
-                          } else {
-                            next.delete(c.id);
-                          }
-                          return next;
-                        });
-                      }}
-                    />
-                    <div className="min-w-0">
-                      <div className="truncate font-medium text-gray-800 text-sm">
-                        {c.nickname || c.name || c.email}
+                candidates.map((c) => {
+                  const isAdminUser = c.role === "admin";
+                  const userGroupNames = c.userGroupIds
+                    .map((gid) => groups.find((g) => g.id === gid)?.name)
+                    .filter(Boolean) as string[];
+                  return (
+                    <label
+                      key={c.id}
+                      className={`flex items-center gap-3 border-b border-gray-50 px-4 py-2 ${
+                        isAdminUser
+                          ? "cursor-not-allowed bg-gray-50 opacity-60"
+                          : "cursor-pointer hover:bg-gray-50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        disabled={isAdminUser}
+                        checked={selectedCandidateIds.has(c.id)}
+                        onChange={(e) => {
+                          if (isAdminUser) return;
+                          setSelectedCandidateIds((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) {
+                              next.add(c.id);
+                            } else {
+                              next.delete(c.id);
+                            }
+                            return next;
+                          });
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                          <span className="shrink-0 font-medium text-gray-800 text-sm">
+                            {c.nickname || c.name || c.email}
+                          </span>
+                          {isAdminUser && (
+                            <span className="shrink-0 inline-block rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                              Admin
+                            </span>
+                          )}
+                          {userGroupNames.slice(0, 2).map((gname) => (
+                            <span
+                              key={gname}
+                              className="shrink-0 inline-block rounded-full bg-blue-50 px-1.5 py-0.5 text-xs text-blue-600"
+                            >
+                              {gname}
+                            </span>
+                          ))}
+                          {userGroupNames.length > 2 && (
+                            <span className="shrink-0 text-xs text-gray-400">
+                              +{userGroupNames.length - 2}…
+                            </span>
+                          )}
+                        </div>
+                        <div className="truncate text-xs text-gray-400">{c.email}</div>
                       </div>
-                      <div className="truncate text-xs text-gray-400">{c.email}</div>
-                    </div>
-                  </label>
-                ))
+                    </label>
+                  );
+                })
               )}
             </div>
             <div className="mt-4 flex items-center justify-between">

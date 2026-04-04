@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getAuthContext } from "@/lib/auth";
+import { getReadOnlyAuthContext } from "@/lib/auth";
 import {
   getDocumentById,
   getDocumentUserGroupIds,
@@ -21,7 +21,7 @@ export default async function ReadPage({ params }: PageProps) {
     notFound();
   }
 
-  const { user } = await getAuthContext();
+  const { user } = await getReadOnlyAuthContext();
 
   if (user?.role !== "admin") {
     const viewer = user

@@ -236,6 +236,33 @@ export interface AuthContext {
 }
 
 /**
+ * Get the current authenticated user from the request cookie **without** modifying
+ * cookies.  Use this in Server Components (page.tsx) where cookie writes are
+ * not allowed.  Session renewal is left to the next Route Handler request.
+ *
+ * Returns { user: null, sessionId: null } for guests / expired sessions.
+ */
+export async function getReadOnlyAuthContext(): Promise<AuthContext> {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+  if (!sessionCookie?.value) {
+    return { user: null, sessionId: null };
+  }
+
+  const session = getAuthSession(sessionCookie.value);
+  if (!session) {
+    return { user: null, sessionId: null };
+  }
+
+  const user = getUserById(session.userId);
+  if (!user || user.status !== "active") {
+    return { user: null, sessionId: null };
+  }
+
+  return { user, sessionId: session.id };
+}
+
+/**
  * Get the current authenticated user from the request cookie.
  * Returns { user: null, sessionId: null } for guests.
  * Automatically renews valid sessions (sliding expiry).

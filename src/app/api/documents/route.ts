@@ -138,19 +138,14 @@ export async function GET(request: NextRequest) {
 
   const documents = await buildDocumentResponse(visibleDocuments, isAdmin);
 
-  // Filter groups: only show groups that have at least 1 visible document or are visible by own setting
+  // Filter groups: per Section 3.5, show groups that contain ≥ 1 visible document.
+  // A group's own visibility applies to inheritance only; if a book in an admin_only group
+  // has access_override=true with visibility=public, that book (and therefore the group)
+  // must still be visible to guests/users.
   const visibleDocGroupIds = new Set(documents.map((d) => d.groupId).filter(Boolean) as string[]);
   const groups = isAdmin
     ? allGroups
-    : allGroups.filter((g) => {
-        // A group is visible if the viewer can see the group AND it has at least 1 visible doc
-        if (!canViewerSeeGroup(viewer, {
-          visibility: g.visibility ?? "public",
-          userGroupIds: g.userGroupIds ?? [],
-        })) return false;
-        // Hide entire group if all its documents are invisible (Section 3.5)
-        return visibleDocGroupIds.has(g.id);
-      });
+    : allGroups.filter((g) => visibleDocGroupIds.has(g.id));
 
   // Strip internal visibility fields from response for non-admin viewers
   const responseDocuments = documents.map((document) => sanitizeDocumentForViewer(document, isAdmin));
