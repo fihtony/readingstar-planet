@@ -5,6 +5,7 @@ import {
   createUser,
   listAllUsers,
 } from "@/lib/repositories/user-repository";
+import { getUserGroupIds, listUserGroups } from "@/lib/repositories/user-group-repository";
 import { getUserByEmail } from "@/lib/auth";
 import { getDatabase } from "@/lib/db";
 
@@ -40,6 +41,11 @@ export async function GET(request: NextRequest) {
   const { authorized, response } = await checkPermission(request, "admin");
   if (!authorized) return response;
 
+  const query = request.nextUrl.searchParams.get("query")?.trim().toLowerCase() ?? "";
+  const roleFilter = request.nextUrl.searchParams.get("role")?.trim() ?? "";
+  const statusFilter = request.nextUrl.searchParams.get("status")?.trim() ?? "";
+  const groupFilter = request.nextUrl.searchParams.get("groupId")?.trim() ?? "";
+
   const db = getDatabase();
   const latestSession = db.prepare(
     `SELECT browser_name, browser_version, os_name, os_version, device_type, device_model, last_seen_at
@@ -49,24 +55,56 @@ export async function GET(request: NextRequest) {
      LIMIT 1`
   );
 
-  const users = listAllUsers().map((user) => ({
-    ...user,
-    recentDevice: formatRecentDevice(
-      latestSession.get(user.id) as
-        | {
-            browser_name: string;
-            browser_version: string;
-            os_name: string;
-            os_version: string;
-            device_type: string;
-            device_model: string;
-            last_seen_at: string;
-          }
-        | undefined
-    ),
-  }));
+  const users = listAllUsers()
+    .map((user) => {
+      const userGroupIds = getUserGroupIds(user.id);
 
-  return NextResponse.json({ users });
+      return {
+        ...user,
+        userGroupIds,
+        recentDevice: formatRecentDevice(
+          latestSession.get(user.id) as
+            | {
+                browser_name: string;
+                browser_version: string;
+                os_name: string;
+                os_version: string;
+                device_type: string;
+                device_model: string;
+                last_seen_at: string;
+              }
+            | undefined
+        ),
+      };
+    })
+    .filter((user) => {
+      if (query) {
+        const haystack = [user.email, user.name, user.nickname]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        if (!haystack.includes(query)) {
+          return false;
+        }
+      }
+
+      if (roleFilter && user.role !== roleFilter) {
+        return false;
+      }
+
+      if (statusFilter && user.status !== statusFilter) {
+        return false;
+      }
+
+      if (groupFilter && !user.userGroupIds.includes(groupFilter)) {
+        return false;
+      }
+
+      return true;
+    });
+
+  return NextResponse.json({ users, userGroups: listUserGroups() });
 }
 
 /** POST /api/admin/users — create (invite) a user */

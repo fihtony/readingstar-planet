@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { useAuth, useCsrfFetch } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/Button";
 import { formatDate, formatDateTime, formatTime } from "@/lib/format-date";
-import type { User, UserRole, UserStatus } from "@/types";
+import type { User, UserRole, UserStatus, UserGroup } from "@/types";
 
 const MAX_NOTE_LENGTH = 5000;
 
 type AdminUserListItem = User & {
+  userGroupIds: string[];
   recentDevice: {
     label: string;
     lastSeenAt: string;
@@ -51,6 +52,7 @@ export default function AdminUsersPage() {
   const csrfFetch = useCsrfFetch();
 
   const [users, setUsers] = useState<AdminUserListItem[]>([]);
+  const [userGroups, setUserGroups] = useState<UserGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,6 +82,7 @@ export default function AdminUsersPage() {
   // Edit form
   const [editRole, setEditRole] = useState<UserRole>("user");
   const [editNotes, setEditNotes] = useState("");
+  const [editUserGroupIds, setEditUserGroupIds] = useState<string[]>([]);
 
   const [actionLoading, setActionLoading] = useState(false);
   const [activityUserId, setActivityUserId] = useState<string | null>(null);
@@ -90,6 +93,7 @@ export default function AdminUsersPage() {
       if (!res.ok) throw new Error("Failed to load users");
       const data = await res.json();
       setUsers(data.users ?? []);
+      setUserGroups(data.userGroups ?? []);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -189,6 +193,7 @@ export default function AdminUsersPage() {
         body: JSON.stringify({
           role: editRole,
           adminNotes: editNotes,
+          userGroupIds: editUserGroupIds,
         }),
       });
       if (!res.ok) {
@@ -256,6 +261,7 @@ export default function AdminUsersPage() {
     setEditingUser(u);
     setEditRole(u.role);
     setEditNotes(u.adminNotes ?? "");
+    setEditUserGroupIds(u.userGroupIds ?? []);
   };
 
   const isSelf = (u: User) => u.id === currentUser?.id;
@@ -579,6 +585,30 @@ export default function AdminUsersPage() {
               />
               <p className="text-xs text-gray-400 mt-1">{editNotes.length}/{MAX_NOTE_LENGTH}</p>
             </div>
+            {userGroups.length > 0 && (
+              <div>
+                <label className="text-sm font-medium block mb-1">User Groups</label>
+                <div className="flex flex-wrap gap-2">
+                  {userGroups.map((g) => (
+                    <label key={g.id} className="flex items-center gap-1 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editUserGroupIds.includes(g.id)}
+                        onChange={(e) => {
+                          setEditUserGroupIds((prev) =>
+                            e.target.checked
+                              ? [...prev, g.id]
+                              : prev.filter((id) => id !== g.id)
+                          );
+                        }}
+                        className="rounded"
+                      />
+                      <span>{g.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-3 justify-end">
               <Button variant="ghost" onClick={() => setEditingUser(null)}>
                 Cancel

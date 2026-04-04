@@ -9,6 +9,8 @@ ReadingStar Planet is a Next.js reading support app designed for children who be
 - PDF, TXT, and pasted-text import flows with preview and editing before saving
 - Library management with document grouping, search, sorting, editing, and reading history
 - Role-aware account management, profile editing, and admin-only global defaults
+- Document access control — three visibility levels (Public, Admin Only, User Groups) for both bookshelves and individual books, per-book override support
+- User group management — admins can create and manage groups, assign users, and grant group-level access to content
 - English and Chinese UI support, plus PWA support for an app-like experience
 
 ## Screenshots
@@ -75,6 +77,13 @@ For end-to-end coverage:
 ```bash
 npm run test:e2e
 ```
+
+## Access Control Notes
+
+- Admins can assign visibility at the bookshelf level or override it per book.
+- Books moved between bookshelves prompt for confirmation when the effective audience would change.
+- Books without a bookshelf stay in an Ungrouped area and default to `Admin Only` visibility until an admin changes them.
+- Direct visits to `/read/[id]` are checked on the server and return the standard 404 page when the book is missing or not accessible to the current viewer.
 
 ## Environment Notes
 

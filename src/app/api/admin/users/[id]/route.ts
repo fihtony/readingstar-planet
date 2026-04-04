@@ -10,6 +10,7 @@ import {
   updateUser,
   countActiveAdmins,
 } from "@/lib/repositories/user-repository";
+import { setUserGroups, getUserGroupIds } from "@/lib/repositories/user-group-repository";
 import { getDatabase } from "@/lib/db";
 
 const MAX_NOTE_LENGTH = 5000;
@@ -128,6 +129,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       deleteAllUserSessions(targetId);
     }
 
+    // Handle user group assignment
+    if (Array.isArray(body.userGroupIds)) {
+      setUserGroups(targetId, body.userGroupIds as string[]);
+      changes.userGroupIds = body.userGroupIds;
+    }
+
     // Audit log (same transaction)
     const action = body.role !== undefined && body.role !== target.role
       ? "role_changed"
@@ -145,7 +152,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   })();
 
   const updated = getUserById(targetId);
-  return NextResponse.json({ user: updated });
+  const userGroupIds = getUserGroupIds(targetId);
+  return NextResponse.json({ user: { ...updated, userGroupIds } });
 }
 
 /** DELETE /api/admin/users/[id] — soft delete user */

@@ -178,6 +178,13 @@ export function AppHeader() {
                         👥 User Management
                       </Link>
                       <Link
+                        href="/admin/user-groups"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-sky-50"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        🧩 User Groups
+                      </Link>
+                      <Link
                         href="/admin/settings"
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-sky-50"
                         onClick={() => setMenuOpen(false)}

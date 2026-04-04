@@ -5,6 +5,10 @@ import type { Document, DocumentGroup } from "@/types";
 
 const pushMock = vi.fn();
 const csrfFetchMock = vi.fn();
+const authState = {
+  isAdmin: true,
+  isAuthenticated: true,
+};
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
@@ -17,10 +21,7 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
-  useAuth: () => ({
-    isAdmin: true,
-    isAuthenticated: true,
-  }),
+  useAuth: () => authState,
   useCsrfFetch: () => csrfFetchMock,
 }));
 
@@ -37,6 +38,8 @@ const mockGroup: DocumentGroup = {
   userId: "user-1",
   name: "Science",
   position: 0,
+  visibility: "public",
+  userGroupIds: [],
   createdAt: "2026-03-31T00:00:00.000Z",
   updatedAt: "2026-03-31T00:00:00.000Z",
 };
@@ -52,6 +55,9 @@ const mockDocument: Document = {
   groupId: "group-1",
   groupPosition: 0,
   icon: null,
+  accessOverride: true,
+  visibility: "admin_only",
+  userGroupIds: [],
   createdAt: "2026-03-31T00:00:00.000Z",
   updatedAt: "2026-03-31T00:00:00.000Z",
   readCount: 3,
@@ -61,6 +67,8 @@ describe("LibraryPage", () => {
   beforeEach(() => {
     pushMock.mockReset();
     csrfFetchMock.mockReset();
+    authState.isAdmin = true;
+    authState.isAuthenticated = true;
     csrfFetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({}),
@@ -68,13 +76,24 @@ describe("LibraryPage", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          documents: [mockDocument],
-          groups: [mockGroup],
-          userStats: {},
-        }),
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+
+        if (url.includes("/api/admin/user-groups")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ groups: [] }),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            documents: [mockDocument],
+            groups: [mockGroup],
+            userStats: {},
+          }),
+        });
       }) as unknown as typeof fetch
     );
   });
@@ -116,5 +135,46 @@ describe("LibraryPage", () => {
 
     const dragHandle = screen.getByRole("button", { name: "Drag group" });
     expect(dragHandle).toHaveAttribute("draggable", "true");
+  });
+
+  it("shows visibility badges for admins", async () => {
+    render(<LibraryPage />);
+
+    expect(await screen.findByText("PUBLIC")).toBeInTheDocument();
+    expect(await screen.findByText("ADMIN")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit bookshelf access" })).toBeInTheDocument();
+  });
+
+  it("shows the no-access empty state for non-admin viewers", async () => {
+    authState.isAdmin = false;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+
+        if (url.includes("/api/admin/user-groups")) {
+          return Promise.resolve({
+            ok: false,
+            json: async () => ({ groups: [] }),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            documents: [],
+            groups: [],
+            userStats: {},
+          }),
+        });
+      }) as unknown as typeof fetch
+    );
+
+    render(<LibraryPage />);
+
+    expect(
+      await screen.findByText("No books are available to read right now. Please contact your teacher.")
+    ).toBeInTheDocument();
   });
 });

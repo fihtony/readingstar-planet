@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { getDatabase } from "../db";
-import type { DocumentGroup } from "@/types";
+import type { DocumentGroup, VisibilityType } from "@/types";
 
 const DEFAULT_DOCUMENT_GROUP_NAME = "My Books";
 
@@ -9,6 +9,7 @@ interface DocumentGroupRow {
   user_id: string;
   name: string;
   position: number;
+  visibility: string;
   created_at: string;
   updated_at: string;
 }
@@ -19,6 +20,7 @@ function rowToDocumentGroup(row: DocumentGroupRow): DocumentGroup {
     userId: row.user_id,
     name: row.name,
     position: row.position,
+    visibility: (row.visibility ?? "public") as VisibilityType,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -91,6 +93,7 @@ export function createDocumentGroup(input: {
     userId: input.userId,
     name: input.name.trim(),
     position,
+    visibility: "public",
     createdAt: now,
     updatedAt: now,
   };
@@ -158,4 +161,61 @@ export function deleteDocumentGroup(id: string): { success: boolean; bookCount?:
   }
   const result = db.prepare("DELETE FROM document_groups WHERE id = ?").run(id);
   return { success: result.changes > 0 };
+}
+
+export function setDocumentGroupVisibility(
+  id: string,
+  visibility: VisibilityType,
+  userGroupIds: string[]
+): DocumentGroup | null {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+
+  const transaction = db.transaction(() => {
+    db.prepare(
+      `UPDATE document_groups SET visibility = ?, updated_at = ? WHERE id = ?`
+    ).run(visibility, now, id);
+
+    db.prepare(
+      `DELETE FROM document_group_visibility WHERE document_group_id = ?`
+    ).run(id);
+
+    if (visibility === "user_groups" && userGroupIds.length > 0) {
+      const stmt = db.prepare(
+        `INSERT OR IGNORE INTO document_group_visibility (document_group_id, user_group_id)
+         VALUES (?, ?)`
+      );
+      for (const ugId of userGroupIds) {
+        stmt.run(id, ugId);
+      }
+    }
+  });
+
+  transaction();
+  return getDocumentGroupById(id);
+}
+
+export function getDocumentGroupUserGroupIds(groupId: string): string[] {
+  const db = getDatabase();
+  const rows = db
+    .prepare(
+      `SELECT user_group_id FROM document_group_visibility WHERE document_group_id = ?`
+    )
+    .all(groupId) as Array<{ user_group_id: string }>;
+  return rows.map((r) => r.user_group_id);
+}
+
+/**
+ * Returns a flat list of all groups with their associated user_group_ids.
+ * Used for server-side permission filtering.
+ */
+export function listDocumentGroupsWithVisibility(): Array<
+  DocumentGroup & { userGroupIds: string[] }
+> {
+  const db = getDatabase();
+  const groups = listDocumentGroups();
+  return groups.map((g) => ({
+    ...g,
+    userGroupIds: getDocumentGroupUserGroupIds(g.id),
+  }));
 }

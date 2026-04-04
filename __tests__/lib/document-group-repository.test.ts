@@ -12,15 +12,18 @@ import {
   createDocumentGroup,
   deleteDocumentGroup,
   getDocumentGroupById,
+  getDocumentGroupUserGroupIds,
   listDocumentGroups,
   ensureDefaultDocumentGroup,
   reorderDocumentGroups,
+  setDocumentGroupVisibility,
 } from "@/lib/repositories/document-group-repository";
 import {
   createDocument,
   listDocuments,
   moveDocumentToGroup,
 } from "@/lib/repositories/document-repository";
+import { createUserGroup, deleteUserGroup } from "@/lib/repositories/user-group-repository";
 
 describe("document-group-repository", () => {
   beforeEach(() => {
@@ -266,6 +269,28 @@ describe("document-group-repository", () => {
     expect(() => {
       initializeSchema(testDb);
     }).not.toThrow();
+  });
+
+  it("stores and reads group-restricted visibility for document groups", () => {
+    const group = createDocumentGroup({ userId: "user-1", name: "Restricted" });
+    const classA = createUserGroup({ name: "Class A" });
+    const classB = createUserGroup({ name: "Class B" });
+
+    const updated = setDocumentGroupVisibility(group.id, "user_groups", [classA.id, classB.id]);
+
+    expect(updated?.visibility).toBe("user_groups");
+    expect(getDocumentGroupUserGroupIds(group.id).sort()).toEqual([classA.id, classB.id].sort());
+  });
+
+  it("removes deleted user groups from bookshelf visibility mappings", () => {
+    const group = createDocumentGroup({ userId: "user-1", name: "Mapped" });
+    const classA = createUserGroup({ name: "Class A" });
+    const classB = createUserGroup({ name: "Class B" });
+    setDocumentGroupVisibility(group.id, "user_groups", [classA.id, classB.id]);
+
+    deleteUserGroup(classA.id, true);
+
+    expect(getDocumentGroupUserGroupIds(group.id)).toEqual([classB.id]);
   });
 
   // ── deleteDocumentGroup ───────────────────────────────────────────────────

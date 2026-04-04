@@ -9,7 +9,13 @@ import { MascotGuide } from "@/components/mascot/MascotGuide";
 import { Button } from "@/components/ui/Button";
 import { getRecommendedReadMinutes, getWordCount, markReadCounted } from "@/lib/read-count";
 import { useAuth, useCsrfFetch } from "@/hooks/useAuth";
-import type { Document, DocumentGroup, UserReadingStats } from "@/types";
+import type {
+  Document,
+  DocumentGroup,
+  UserGroup,
+  UserReadingStats,
+  VisibilityType,
+} from "@/types";
 
 type SortBy = "name" | "size" | "mostRead" | "latestUpdate" | "myRead";
 type SortDir = "asc" | "desc";
@@ -22,6 +28,85 @@ const DEFAULT_SORT_DIR: Record<SortBy, SortDir> = {
   myRead: "desc",
 };
 
+const UNGROUPED_GROUP_ID = "__ungrouped__";
+
+type VisibilityDescriptor = {
+  visibility: VisibilityType;
+  userGroupIds?: string[];
+  inherited?: boolean;
+};
+
+type MoveConfirmationState = {
+  documentId: string;
+  documentTitle: string;
+  targetGroupId: string | null;
+  sourceGroupName: string | null;
+  targetGroupName: string | null;
+  currentVisibility: {
+    visibility: VisibilityType;
+    userGroupIds: string[];
+  };
+  targetVisibility: {
+    visibility: VisibilityType;
+    userGroupIds: string[];
+  };
+};
+
+function uniqueGroupIds(userGroupIds: string[] | undefined): string[] {
+  return Array.from(new Set(userGroupIds ?? []));
+}
+
+function getVisibilityMeta(
+  descriptor: VisibilityDescriptor,
+  userGroups: UserGroup[]
+): {
+  label: string;
+  detail: string;
+  className: string;
+} {
+  const ids = uniqueGroupIds(descriptor.userGroupIds);
+  const inheritedPrefix = descriptor.inherited ? "↑ " : "";
+  const inheritedClass = descriptor.inherited ? " opacity-70" : "";
+
+  if (descriptor.visibility === "public") {
+    return {
+      label: `${inheritedPrefix}PUBLIC`,
+      detail: "Visible to guests and signed-in users.",
+      className: `bg-orange-100 text-orange-700${inheritedClass}`,
+    };
+  }
+
+  if (descriptor.visibility === "admin_only") {
+    return {
+      label: `${inheritedPrefix}ADMIN`,
+      detail: "Visible to admins only.",
+      className: `bg-red-100 text-red-700${inheritedClass}`,
+    };
+  }
+
+  if (ids.length === 1) {
+    const name = userGroups.find((group) => group.id === ids[0])?.name ?? "User Group";
+    return {
+      label: `${inheritedPrefix}${name}`,
+      detail: `Visible to members of ${name}.`,
+      className: `bg-blue-100 text-blue-700${inheritedClass}`,
+    };
+  }
+
+  const count = ids.length;
+  return {
+    label: `${inheritedPrefix}${count || "Selected"} ${count === 1 ? "user group" : "user groups"}`,
+    detail: count > 0
+      ? `Visible to any member of ${count} user groups.`
+      : "Visible to selected user groups.",
+    className: `bg-green-100 text-green-700${inheritedClass}`,
+  };
+}
+
+function toggleSelection(current: string[], id: string, checked: boolean): string[] {
+  return checked ? [...new Set([...current, id])] : current.filter((item) => item !== id);
+}
+
 export default function LibraryPage() {
   const t = useTranslations("library");
   const mascot = useTranslations("mascot");
@@ -30,6 +115,7 @@ export default function LibraryPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [groups, setGroups] = useState<DocumentGroup[]>([]);
+  const [userGroups, setUserGroups] = useState<UserGroup[]>([]);
   const [userStats, setUserStats] = useState<Record<string, UserReadingStats>>({});
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -66,6 +152,24 @@ export default function LibraryPage() {
   const [deletingGroupName, setDeletingGroupName] = useState("");
   const [deleteGroupError, setDeleteGroupError] = useState<string | null>(null);
 
+  // Visibility editors
+  const [editingGroupVisibility, setEditingGroupVisibility] = useState<DocumentGroup | null>(null);
+  const [groupVisibility, setGroupVisibility] = useState<VisibilityType>("public");
+  const [groupVisibilityUserGroupIds, setGroupVisibilityUserGroupIds] = useState<string[]>([]);
+  const [groupVisibilitySaving, setGroupVisibilitySaving] = useState(false);
+  const [groupVisibilityError, setGroupVisibilityError] = useState<string | null>(null);
+  const [editingDocumentVisibility, setEditingDocumentVisibility] = useState<Document | null>(null);
+  const [documentAccessOverride, setDocumentAccessOverride] = useState(false);
+  const [documentVisibility, setDocumentVisibility] = useState<VisibilityType>("public");
+  const [documentVisibilityUserGroupIds, setDocumentVisibilityUserGroupIds] = useState<string[]>([]);
+  const [documentVisibilitySaving, setDocumentVisibilitySaving] = useState(false);
+  const [documentVisibilityError, setDocumentVisibilityError] = useState<string | null>(null);
+
+  // Move confirmation
+  const [pendingMove, setPendingMove] = useState<MoveConfirmationState | null>(null);
+  const [moveVisibilityChoice, setMoveVisibilityChoice] = useState<"inherit_target" | "preserve_current">("inherit_target");
+  const [confirmingMove, setConfirmingMove] = useState(false);
+
   // Invite-only dialog
   const [showInviteOnlyDialog, setShowInviteOnlyDialog] = useState(false);
   const [requestEmail, setRequestEmail] = useState("");
@@ -77,6 +181,29 @@ export default function LibraryPage() {
   useEffect(() => {
     fetchDocuments();
   }, []);
+
+  useEffect(() => {
+    const fetchUserGroups = async () => {
+      if (!isAdmin) {
+        setUserGroups([]);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/admin/user-groups");
+        if (!response.ok) {
+          return;
+        }
+
+        const data = await response.json();
+        setUserGroups(data.groups ?? []);
+      } catch {
+        setUserGroups([]);
+      }
+    };
+
+    void fetchUserGroups();
+  }, [isAdmin]);
 
   // Detect invite_only redirect from Google OAuth callback
   useEffect(() => {
@@ -250,6 +377,99 @@ export default function LibraryPage() {
     }
   };
 
+  const openGroupVisibilityEditor = (group: DocumentGroup) => {
+    setEditingGroupVisibility(group);
+    setGroupVisibility(group.visibility ?? "public");
+    setGroupVisibilityUserGroupIds(group.userGroupIds ?? []);
+    setGroupVisibilityError(null);
+  };
+
+  const handleSaveGroupVisibility = async () => {
+    if (!editingGroupVisibility) return;
+    if (groupVisibility === "user_groups" && groupVisibilityUserGroupIds.length === 0) {
+      setGroupVisibilityError("Select at least one user group for group-restricted access.");
+      return;
+    }
+
+    setGroupVisibilitySaving(true);
+    setGroupVisibilityError(null);
+
+    try {
+      const response = await csrfFetch(`/api/document-groups/${editingGroupVisibility.id}/visibility`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          visibility: groupVisibility,
+          userGroupIds: groupVisibility === "user_groups" ? groupVisibilityUserGroupIds : [],
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setGroupVisibilityError(data.error ?? "Failed to save bookshelf visibility.");
+        return;
+      }
+
+      setEditingGroupVisibility(null);
+      await fetchDocuments();
+    } finally {
+      setGroupVisibilitySaving(false);
+    }
+  };
+
+  const openDocumentVisibilityEditor = (doc: Document) => {
+    const parentGroup = doc.groupId ? groups.find((group) => group.id === doc.groupId) : null;
+    const inheritedVisibility = parentGroup?.visibility ?? "admin_only";
+    const inheritedUserGroupIds = parentGroup?.userGroupIds ?? [];
+
+    setEditingDocumentVisibility(doc);
+    setDocumentAccessOverride(Boolean(doc.groupId && doc.accessOverride));
+    setDocumentVisibility(doc.accessOverride ? (doc.visibility ?? inheritedVisibility) : inheritedVisibility);
+    setDocumentVisibilityUserGroupIds(doc.accessOverride ? (doc.userGroupIds ?? []) : inheritedUserGroupIds);
+    setDocumentVisibilityError(null);
+  };
+
+  const handleSaveDocumentVisibility = async () => {
+    if (!editingDocumentVisibility) return;
+
+    const effectiveAccessOverride = editingDocumentVisibility.groupId
+      ? documentAccessOverride
+      : true;
+
+    if (effectiveAccessOverride && documentVisibility === "user_groups" && documentVisibilityUserGroupIds.length === 0) {
+      setDocumentVisibilityError("Select at least one user group for group-restricted access.");
+      return;
+    }
+
+    setDocumentVisibilitySaving(true);
+    setDocumentVisibilityError(null);
+
+    try {
+      const response = await csrfFetch(`/api/documents/${editingDocumentVisibility.id}/visibility`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accessOverride: effectiveAccessOverride,
+          visibility: documentVisibility,
+          userGroupIds: effectiveAccessOverride && documentVisibility === "user_groups"
+            ? documentVisibilityUserGroupIds
+            : [],
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setDocumentVisibilityError(data.error ?? "Failed to save book visibility.");
+        return;
+      }
+
+      setEditingDocumentVisibility(null);
+      await fetchDocuments();
+    } finally {
+      setDocumentVisibilitySaving(false);
+    }
+  };
+
   const handleUpdateDoc = async () => {
     if (!editingDoc) return;
     setIsSavingDoc(true);
@@ -326,7 +546,7 @@ export default function LibraryPage() {
     });
   };
 
-  const handleDocumentDrop = async (targetGroupId: string) => {
+  const handleDocumentDrop = async (targetGroupId: string | null) => {
     if (!draggingDocumentId) return;
 
     const draggedDocument = documents.find((doc) => doc.id === draggingDocumentId);
@@ -349,8 +569,46 @@ export default function LibraryPage() {
     setDraggingDocumentId(null);
     setDropGroupId(null);
 
+    if (res.status === 409) {
+      const data = await res.json().catch(() => ({}));
+      if (data.confirmation) {
+        setMoveVisibilityChoice("inherit_target");
+        setPendingMove({
+          documentId: draggingDocumentId,
+          targetGroupId,
+          ...data.confirmation,
+        });
+      }
+      return;
+    }
+
     if (res.ok) {
       await fetchDocuments();
+    }
+  };
+
+  const handleConfirmMove = async () => {
+    if (!pendingMove) return;
+
+    setConfirmingMove(true);
+    try {
+      const response = await csrfFetch("/api/documents", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "move-document",
+          documentId: pendingMove.documentId,
+          groupId: pendingMove.targetGroupId,
+          visibilityChoice: moveVisibilityChoice,
+        }),
+      });
+
+      if (response.ok) {
+        setPendingMove(null);
+        await fetchDocuments();
+      }
+    } finally {
+      setConfirmingMove(false);
     }
   };
 
@@ -387,30 +645,36 @@ export default function LibraryPage() {
         d.title.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : documents;
+  const ungroupedDocuments = sortDocuments(
+    filteredDocs.filter((doc) => doc.groupId === null)
+  );
 
   const clearSearchQuery = () => {
     setSearchQuery("");
     searchInputRef.current?.focus();
   };
 
-  const groupedDocuments = groups.length > 0
-    ? groups.map((group) => ({
-        group,
-        documents: sortDocuments(filteredDocs.filter((doc) => doc.groupId === group.id)),
-      }))
-    : [
-        {
+  const groupedDocuments = [
+    ...groups.map((group) => ({
+      group,
+      documents: sortDocuments(filteredDocs.filter((doc) => doc.groupId === group.id)),
+      isUngrouped: false,
+    })),
+    ...(ungroupedDocuments.length > 0
+      ? [{
           group: {
-            id: "fallback-group",
-            userId: "default-user",
-            name: t("untitledGroup"),
-            position: 0,
+            id: UNGROUPED_GROUP_ID,
+            userId: "system",
+            name: t("ungroupedGroup"),
+            position: Number.MAX_SAFE_INTEGER,
             createdAt: "",
             updatedAt: "",
           },
-          documents: sortDocuments(filteredDocs),
-        },
-      ];
+          documents: ungroupedDocuments,
+          isUngrouped: true,
+        }]
+      : []),
+  ];
 
   const sortFields: SortBy[] = isAuthenticated
     ? ["name", "size", "mostRead", "latestUpdate", "myRead"]
@@ -476,10 +740,16 @@ export default function LibraryPage() {
       )}
 
       {documents.length === 0 && !showUpload && (
-        <MascotGuide
-          message={mascot("uploadHint")}
-          mood="encouraging"
-        />
+        isAdmin ? (
+          <MascotGuide
+            message={mascot("uploadHint")}
+            mood="encouraging"
+          />
+        ) : (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm font-medium text-slate-500">
+            {t("noAccessibleBooks")}
+          </div>
+        )
       )}
 
       {documents.length > 0 && (
@@ -530,7 +800,7 @@ export default function LibraryPage() {
       )}
 
       <div className="flex flex-col gap-4">
-        {groupedDocuments.map(({ group, documents: groupDocuments }) => (
+        {groupedDocuments.map(({ group, documents: groupDocuments, isUngrouped }) => (
           <section
             key={group.id}
             className={`rounded-[24px] border-2 bg-white/95 p-4 shadow-sm transition-colors ${
@@ -547,24 +817,21 @@ export default function LibraryPage() {
             onDragLeave={() => setDropGroupId((current) => current === group.id ? null : current)}
             onDrop={(e) => {
               e.preventDefault();
-              if (group.id === "fallback-group") {
-                setDraggingDocumentId(null);
-                setDraggingGroupId(null);
-                setDropGroupId(null);
-                return;
-              }
               if (draggingDocumentId) {
-                void handleDocumentDrop(group.id);
+                void handleDocumentDrop(isUngrouped ? null : group.id);
                 return;
               }
-              if (draggingGroupId) {
+              if (draggingGroupId && !isUngrouped) {
                 void handleGroupDrop(group.id);
+                return;
               }
+              setDraggingGroupId(null);
+              setDropGroupId(null);
             }}
           >
             <div className="mb-4 flex items-center justify-between gap-3">
               <div className="flex min-w-0 flex-1 items-center gap-3">
-                {isAdmin && group.id !== "fallback-group" ? (
+                {isAdmin && !isUngrouped ? (
                   <button
                     type="button"
                     draggable
@@ -584,7 +851,7 @@ export default function LibraryPage() {
                   </button>
                 ) : null}
                 <div className="min-w-0 flex-1">
-                  {editingGroupId === group.id ? (
+                  {editingGroupId === group.id && !isUngrouped ? (
                     <div
                       className="flex w-full items-center gap-2"
                       onClick={(e) => e.stopPropagation()}
@@ -624,11 +891,37 @@ export default function LibraryPage() {
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h2 className="text-lg font-black text-slate-800">
                         {group.name || t("untitledGroup")}
                       </h2>
-                      {isAdmin && group.id !== "fallback-group" && (
+                      {isAdmin && group.visibility && !isUngrouped && (
+                        <button
+                          type="button"
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${getVisibilityMeta({ visibility: group.visibility, userGroupIds: group.userGroupIds }, userGroups).className}`}
+                          title={getVisibilityMeta({ visibility: group.visibility, userGroupIds: group.userGroupIds }, userGroups).detail}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openGroupVisibilityEditor(group);
+                          }}
+                        >
+                          {getVisibilityMeta({ visibility: group.visibility, userGroupIds: group.userGroupIds }, userGroups).label}
+                        </button>
+                      )}
+                      {isAdmin && !isUngrouped && (
+                        <button
+                          className="text-gray-400 hover:text-amber-500 transition-colors p-1 rounded-lg text-sm"
+                          title="Edit bookshelf access"
+                          aria-label="Edit bookshelf access"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openGroupVisibilityEditor(group);
+                          }}
+                        >
+                          🔒
+                        </button>
+                      )}
+                      {isAdmin && !isUngrouped && (
                         <button
                           className="text-gray-400 hover:text-sky-500 transition-colors p-1 rounded-lg text-sm"
                           title={t("editGroupLabel")}
@@ -641,7 +934,7 @@ export default function LibraryPage() {
                           ✏️
                         </button>
                       )}
-                      {isAdmin && group.id !== "fallback-group" && (
+                      {isAdmin && !isUngrouped && (
                         <button
                           className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded-lg text-sm"
                           title="Delete group"
@@ -676,8 +969,21 @@ export default function LibraryPage() {
                     isAdmin={isAdmin}
                     isAuthenticated={isAuthenticated}
                     personalStats={userStats[doc.id] ?? null}
+                    visibilityMeta={isAdmin
+                      ? getVisibilityMeta(
+                          doc.accessOverride
+                            ? { visibility: doc.visibility ?? "public", userGroupIds: doc.userGroupIds }
+                            : {
+                                visibility: (doc.groupId ? groups.find((group) => group.id === doc.groupId)?.visibility : "admin_only") ?? "admin_only",
+                                userGroupIds: doc.groupId ? groups.find((group) => group.id === doc.groupId)?.userGroupIds : [],
+                                inherited: true,
+                              },
+                          userGroups
+                        )
+                      : null}
                     onDelete={() => confirmDelete(doc.id, doc.title)}
                     onEdit={() => openEditDoc(doc)}
+                    onEditVisibility={() => openDocumentVisibilityEditor(doc)}
                     onDragStart={() => {
                       if (!isAdmin) return;
                       setDraggingDocumentId(doc.id);
@@ -698,6 +1004,324 @@ export default function LibraryPage() {
           </section>
         ))}
       </div>
+
+      {editingGroupVisibility && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={() => setEditingGroupVisibility(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h2 className="text-lg font-black text-slate-800">Bookshelf Access</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {documents.filter((doc) => doc.groupId === editingGroupVisibility.id && !doc.accessOverride).length} book(s) currently inherit this bookshelf setting.
+              </p>
+            </div>
+
+            {groupVisibilityError && (
+              <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                {groupVisibilityError}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3 text-sm text-slate-700">
+              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3">
+                <input
+                  type="radio"
+                  name="group-visibility"
+                  checked={groupVisibility === "public"}
+                  onChange={() => setGroupVisibility("public")}
+                />
+                <span>
+                  <span className="font-semibold">Public</span>
+                  <span className="block text-xs text-slate-500">Visible to guests and signed-in users.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3">
+                <input
+                  type="radio"
+                  name="group-visibility"
+                  checked={groupVisibility === "admin_only"}
+                  onChange={() => setGroupVisibility("admin_only")}
+                />
+                <span>
+                  <span className="font-semibold">Admin Only</span>
+                  <span className="block text-xs text-slate-500">Only admins can see this bookshelf.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3">
+                <input
+                  type="radio"
+                  name="group-visibility"
+                  checked={groupVisibility === "user_groups"}
+                  onChange={() => setGroupVisibility("user_groups")}
+                />
+                <span>
+                  <span className="font-semibold">Selected User Groups</span>
+                  <span className="block text-xs text-slate-500">Only members of the selected groups can see this bookshelf.</span>
+                </span>
+              </label>
+            </div>
+
+            {groupVisibility === "user_groups" && (
+              <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200 p-3">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">User Groups</div>
+                <div className="flex flex-col gap-2">
+                  {userGroups.map((group) => (
+                    <label key={group.id} className="flex items-start gap-3 rounded-xl border border-slate-100 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={groupVisibilityUserGroupIds.includes(group.id)}
+                        onChange={(e) => {
+                          setGroupVisibilityUserGroupIds((current) =>
+                            toggleSelection(current, group.id, e.target.checked)
+                          );
+                        }}
+                      />
+                      <span>
+                        <span className="font-medium text-slate-700">{group.name}</span>
+                        <span className="block text-xs text-slate-500">
+                          {group.memberCount ?? 0} member(s)
+                          {(group.memberCount ?? 0) === 0 ? " • Warning: this group is currently empty." : ""}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200"
+                onClick={() => setEditingGroupVisibility(null)}
+                disabled={groupVisibilitySaving}
+              >
+                {t("cancelButton")}
+              </button>
+              <button
+                className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-60"
+                onClick={() => void handleSaveGroupVisibility()}
+                disabled={groupVisibilitySaving}
+              >
+                {groupVisibilitySaving ? t("savingButton") : t("saveButton")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingDocumentVisibility && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={() => setEditingDocumentVisibility(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h2 className="text-lg font-black text-slate-800">Book Access</h2>
+              <p className="mt-1 text-sm text-slate-500 line-clamp-2">{editingDocumentVisibility.title}</p>
+            </div>
+
+            {documentVisibilityError && (
+              <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                {documentVisibilityError}
+              </div>
+            )}
+
+            <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={editingDocumentVisibility.groupId ? documentAccessOverride : true}
+                disabled={!editingDocumentVisibility.groupId}
+                onChange={(e) => setDocumentAccessOverride(e.target.checked)}
+              />
+              <span>
+                <span className="font-semibold">Override bookshelf setting</span>
+                <span className="block text-xs text-slate-500">
+                  {editingDocumentVisibility.groupId
+                    ? "When unchecked, this book inherits its bookshelf access."
+                    : "Ungrouped books always use their own access setting."}
+                </span>
+              </span>
+            </label>
+
+            {(editingDocumentVisibility.groupId ? documentAccessOverride : true) && (
+              <>
+                <div className="flex flex-col gap-3 text-sm text-slate-700">
+                  <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3">
+                    <input
+                      type="radio"
+                      name="document-visibility"
+                      checked={documentVisibility === "public"}
+                      onChange={() => setDocumentVisibility("public")}
+                    />
+                    <span>
+                      <span className="font-semibold">Public</span>
+                      <span className="block text-xs text-slate-500">Visible to guests and signed-in users.</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3">
+                    <input
+                      type="radio"
+                      name="document-visibility"
+                      checked={documentVisibility === "admin_only"}
+                      onChange={() => setDocumentVisibility("admin_only")}
+                    />
+                    <span>
+                      <span className="font-semibold">Admin Only</span>
+                      <span className="block text-xs text-slate-500">Only admins can read this book.</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3">
+                    <input
+                      type="radio"
+                      name="document-visibility"
+                      checked={documentVisibility === "user_groups"}
+                      onChange={() => setDocumentVisibility("user_groups")}
+                    />
+                    <span>
+                      <span className="font-semibold">Selected User Groups</span>
+                      <span className="block text-xs text-slate-500">Only members of the selected groups can read this book.</span>
+                    </span>
+                  </label>
+                </div>
+
+                {documentVisibility === "user_groups" && (
+                  <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200 p-3">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">User Groups</div>
+                    <div className="flex flex-col gap-2">
+                      {userGroups.map((group) => (
+                        <label key={group.id} className="flex items-start gap-3 rounded-xl border border-slate-100 px-3 py-2">
+                          <input
+                            type="checkbox"
+                            checked={documentVisibilityUserGroupIds.includes(group.id)}
+                            onChange={(e) => {
+                              setDocumentVisibilityUserGroupIds((current) =>
+                                toggleSelection(current, group.id, e.target.checked)
+                              );
+                            }}
+                          />
+                          <span>
+                            <span className="font-medium text-slate-700">{group.name}</span>
+                            <span className="block text-xs text-slate-500">
+                              {group.memberCount ?? 0} member(s)
+                              {(group.memberCount ?? 0) === 0 ? " • Warning: this group is currently empty." : ""}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200"
+                onClick={() => setEditingDocumentVisibility(null)}
+                disabled={documentVisibilitySaving}
+              >
+                {t("cancelButton")}
+              </button>
+              <button
+                className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-60"
+                onClick={() => void handleSaveDocumentVisibility()}
+                disabled={documentVisibilitySaving}
+              >
+                {documentVisibilitySaving ? t("savingButton") : t("saveButton")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingMove && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={() => setPendingMove(null)}
+        >
+          <div
+            className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h2 className="text-lg font-black text-slate-800">Access Change Notice</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Move &ldquo;{pendingMove.documentTitle}&rdquo; from &ldquo;{pendingMove.sourceGroupName ?? t("ungroupedGroup")}&rdquo; to &ldquo;{pendingMove.targetGroupName ?? t("ungroupedGroup")}&rdquo;.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-slate-500">Current access</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${getVisibilityMeta(pendingMove.currentVisibility, userGroups).className}`}>
+                  {getVisibilityMeta(pendingMove.currentVisibility, userGroups).label}
+                </span>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <span className="text-slate-500">Target bookshelf access</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${getVisibilityMeta(pendingMove.targetVisibility, userGroups).className}`}>
+                  {getVisibilityMeta(pendingMove.targetVisibility, userGroups).label}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 text-sm text-slate-700">
+              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3">
+                <input
+                  type="radio"
+                  name="move-visibility-choice"
+                  checked={moveVisibilityChoice === "inherit_target"}
+                  onChange={() => setMoveVisibilityChoice("inherit_target")}
+                />
+                <span>
+                  <span className="font-semibold">Inherit target bookshelf access</span>
+                  <span className="block text-xs text-slate-500">Recommended when the book should follow its new bookshelf.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3">
+                <input
+                  type="radio"
+                  name="move-visibility-choice"
+                  checked={moveVisibilityChoice === "preserve_current"}
+                  onChange={() => setMoveVisibilityChoice("preserve_current")}
+                />
+                <span>
+                  <span className="font-semibold">Keep current access as an override</span>
+                  <span className="block text-xs text-slate-500">The book will keep its current access after the move.</span>
+                </span>
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                className="rounded-xl bg-gray-100 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-200"
+                onClick={() => setPendingMove(null)}
+                disabled={confirmingMove}
+              >
+                {t("cancelButton")}
+              </button>
+              <button
+                className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-60"
+                onClick={() => void handleConfirmMove()}
+                disabled={confirmingMove}
+              >
+                {confirmingMove ? "Moving..." : "Confirm Move"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete confirmation dialog */}
       {deletingDocId && (
@@ -956,8 +1580,10 @@ function DocumentCard({
   isAdmin,
   isAuthenticated,
   personalStats,
+  visibilityMeta,
   onDelete,
   onEdit,
+  onEditVisibility,
   onDragStart,
   onDragEnd,
 }: {
@@ -966,8 +1592,10 @@ function DocumentCard({
   isAdmin: boolean;
   isAuthenticated: boolean;
   personalStats: UserReadingStats | null;
+  visibilityMeta: { label: string; detail: string; className: string } | null;
   onDelete: () => void;
   onEdit: () => void;
+  onEditVisibility: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
 }) {
@@ -1082,6 +1710,20 @@ function DocumentCard({
         </div>
         <h3 className="font-bold text-sm leading-snug line-clamp-3 flex-1">{doc.title}</h3>
       </div>
+
+      {isAdmin && visibilityMeta && (
+        <button
+          type="button"
+          className={`self-start rounded-full px-2 py-0.5 text-xs font-semibold ${visibilityMeta.className}`}
+          title={visibilityMeta.detail}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEditVisibility();
+          }}
+        >
+          {visibilityMeta.label}
+        </button>
+      )}
 
       {/* Stats row */}
       <div className="flex items-center gap-x-2 text-xs text-gray-400">

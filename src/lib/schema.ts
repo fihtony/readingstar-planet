@@ -192,6 +192,42 @@ export function initializeSchema(db: Database.Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_rate_limit_log_key_time ON rate_limit_log(key, attempt_at);
+
+    CREATE TABLE IF NOT EXISTS user_groups (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT NOT NULL DEFAULT '',
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS user_group_members (
+      user_id TEXT NOT NULL,
+      group_id TEXT NOT NULL,
+      assigned_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      PRIMARY KEY (user_id, group_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (group_id) REFERENCES user_groups(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_group_members_group ON user_group_members(group_id);
+    CREATE INDEX IF NOT EXISTS idx_user_group_members_user ON user_group_members(user_id);
+
+    CREATE TABLE IF NOT EXISTS document_group_visibility (
+      document_group_id TEXT NOT NULL,
+      user_group_id TEXT NOT NULL,
+      PRIMARY KEY (document_group_id, user_group_id),
+      FOREIGN KEY (document_group_id) REFERENCES document_groups(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_group_id) REFERENCES user_groups(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS document_visibility (
+      document_id TEXT NOT NULL,
+      user_group_id TEXT NOT NULL,
+      PRIMARY KEY (document_id, user_group_id),
+      FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_group_id) REFERENCES user_groups(id) ON DELETE CASCADE
+    );
   `);
 
   migrateUsersTable(db);
@@ -204,6 +240,8 @@ export function initializeSchema(db: Database.Database): void {
   `);
   ensureUserSettingsLocale(db);
   ensureDocumentGroupingSchema(db);
+  migrateDocumentGroupVisibility(db);
+  migrateDocumentVisibility(db);
   seedDefaultAppMetadata(db);
   seedInitialAdmin(db);
 }
@@ -537,4 +575,31 @@ function hasColumn(
     name: string;
   }>;
   return rows.some((row) => row.name === columnName);
+}
+
+/**
+ * Add visibility column to document_groups if missing.
+ */
+function migrateDocumentGroupVisibility(db: Database.Database): void {
+  if (!hasColumn(db, "document_groups", "visibility")) {
+    db.prepare(
+      `ALTER TABLE document_groups ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'`
+    ).run();
+  }
+}
+
+/**
+ * Add access_override and visibility columns to documents if missing.
+ */
+function migrateDocumentVisibility(db: Database.Database): void {
+  if (!hasColumn(db, "documents", "access_override")) {
+    db.prepare(
+      `ALTER TABLE documents ADD COLUMN access_override INTEGER NOT NULL DEFAULT 0`
+    ).run();
+  }
+  if (!hasColumn(db, "documents", "visibility")) {
+    db.prepare(
+      `ALTER TABLE documents ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'`
+    ).run();
+  }
 }

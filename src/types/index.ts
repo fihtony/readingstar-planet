@@ -9,6 +9,7 @@ export type FontFamily = "opendyslexic" | "system";
 export type AchievementType = "streak" | "effort" | "milestone";
 export type DeviceType = "desktop" | "tablet" | "mobile" | "bot" | "unknown";
 export type RegistrationPolicy = "open" | "invite-only";
+export type VisibilityType = "public" | "admin_only" | "user_groups";
 
 export interface User {
   id: string;
@@ -98,6 +99,12 @@ export interface Document {
   groupId: string | null;
   groupPosition: number;
   icon: string | null;
+  /** Only returned in admin API responses */
+  accessOverride?: boolean;
+  /** Only returned in admin API responses */
+  visibility?: VisibilityType;
+  /** Only returned in admin API responses */
+  userGroupIds?: string[];
   createdAt: string;
   updatedAt: string;
   readCount: number;
@@ -108,6 +115,19 @@ export interface DocumentGroup {
   userId: string;
   name: string;
   position: number;
+  /** Access visibility; always set by DB, may be omitted from non-admin API responses */
+  visibility?: VisibilityType;
+  /** Only returned in admin API responses */
+  userGroupIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserGroup {
+  id: string;
+  name: string;
+  description: string;
+  memberCount?: number;
   createdAt: string;
   updatedAt: string;
 }

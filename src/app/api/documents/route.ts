@@ -1,13 +1,64 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createDocument, getDocumentById, listDocuments, searchDocuments, deleteDocument, moveDocumentToGroup, updateDocument, incrementDocumentReadCount } from "@/lib/repositories/document-repository";
-import { ensureDefaultDocumentGroup, listDocumentGroups } from "@/lib/repositories/document-group-repository";
+import {
+  createDocument,
+  getDocumentById,
+  listDocuments,
+  searchDocuments,
+  deleteDocument,
+  updateDocument,
+  incrementDocumentReadCount,
+  getDocumentUserGroupIds,
+  moveDocumentWithVisibilityHandling,
+  type MoveDocumentVisibilityChoice,
+} from "@/lib/repositories/document-repository";
+import { listDocumentGroupsWithVisibility } from "@/lib/repositories/document-group-repository";
 import { validateFile, extractTextFromTXT, titleFromFilename } from "@/lib/pdf-parser";
 import { extractTextFromPDF } from "@/lib/pdf-parser.server";
 import { sanitizeTextContent } from "@/lib/text-processor";
 import { checkPermission, getClientIp } from "@/lib/permissions";
 import { getAuthContext, logAdminAudit, logUserActivity } from "@/lib/auth";
 import { recordUserRead, getUserStatsMap } from "@/lib/repositories/reading-stats-repository";
+import { getUserGroupIds } from "@/lib/repositories/user-group-repository";
+import { canViewerSeeDocument, canViewerSeeGroup, type ViewerContext } from "@/lib/visibility";
 import { logger } from "@/lib/logger";
+
+function sanitizeDocumentForViewer(document: DocumentLike, isAdmin: boolean) {
+  if (isAdmin) {
+    return document;
+  }
+
+  const {
+    accessOverride: _accessOverride,
+    visibility: _visibility,
+    userGroupIds: _userGroupIds,
+    ...rest
+  } = document;
+
+  return rest;
+}
+
+function sanitizeGroupForViewer(group: GroupLike, isAdmin: boolean) {
+  if (isAdmin) {
+    return group;
+  }
+
+  const { userGroupIds: _userGroupIds, visibility: _visibility, ...rest } = group;
+  return rest;
+}
+
+type DocumentLike = Awaited<ReturnType<typeof buildDocumentResponse>>[number];
+type GroupLike = ReturnType<typeof listDocumentGroupsWithVisibility>[number];
+
+async function buildDocumentResponse(documents: ReturnType<typeof listDocuments>, isAdmin: boolean) {
+  if (!isAdmin) {
+    return documents;
+  }
+
+  return documents.map((document) => ({
+    ...document,
+    userGroupIds: getDocumentUserGroupIds(document.id),
+  }));
+}
 
 export async function GET(request: NextRequest) {
   const { authContext } = await checkPermission(request, "public");
@@ -18,7 +69,33 @@ export async function GET(request: NextRequest) {
     if (!document) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 });
     }
-    return NextResponse.json({ document });
+
+    const isAdmin = authContext.user?.role === "admin";
+    const documentWithVisibility = isAdmin
+      ? { ...document, userGroupIds: getDocumentUserGroupIds(document.id) }
+      : document;
+
+    // Permission check for direct document access
+    if (!isAdmin) {
+      const viewer: ViewerContext | null = authContext.user
+        ? { role: authContext.user.role, groupIds: getUserGroupIds(authContext.user.id) }
+        : null;
+      const groups = listDocumentGroupsWithVisibility();
+      const docGroup = document.groupId ? groups.find((g) => g.id === document.groupId) : null;
+      const docUserGroupIds = getDocumentUserGroupIds(document.id);
+      const canSee = canViewerSeeDocument(viewer, {
+        accessOverride: Boolean(document.accessOverride),
+        visibility: document.visibility ?? "admin_only",
+        userGroupIds: docUserGroupIds,
+        groupVisibility: docGroup?.visibility ?? null,
+        groupUserGroupIds: docGroup?.userGroupIds ?? [],
+      });
+      if (!canSee) {
+        return NextResponse.json({ error: "Document not found" }, { status: 404 });
+      }
+    }
+
+    return NextResponse.json({ document: sanitizeDocumentForViewer(documentWithVisibility, isAdmin) });
   }
 
   const sort = request.nextUrl.searchParams.get("sort");
@@ -34,8 +111,50 @@ export async function GET(request: NextRequest) {
   }
 
   const search = request.nextUrl.searchParams.get("search");
-  const documents = search ? searchDocuments(search) : listDocuments();
-  const groups = listDocumentGroups();
+  const allDocuments = search ? searchDocuments(search) : listDocuments();
+  const allGroups = listDocumentGroupsWithVisibility();
+
+  // Build viewer context for permission filtering
+  const viewer: ViewerContext | null = authContext.user
+    ? { role: authContext.user.role, groupIds: authContext.user.role === "admin" ? [] : getUserGroupIds(authContext.user.id) }
+    : null;
+
+  const isAdmin = authContext.user?.role === "admin";
+
+  // Filter documents by visibility (admins see all)
+  const visibleDocuments = isAdmin
+    ? allDocuments
+    : allDocuments.filter((doc) => {
+        const docGroup = doc.groupId ? allGroups.find((g) => g.id === doc.groupId) : null;
+        const docUserGroupIds = getDocumentUserGroupIds(doc.id);
+        return canViewerSeeDocument(viewer, {
+          accessOverride: Boolean(doc.accessOverride),
+          visibility: doc.visibility ?? "admin_only",
+          userGroupIds: docUserGroupIds,
+          groupVisibility: docGroup?.visibility ?? null,
+          groupUserGroupIds: docGroup?.userGroupIds ?? [],
+        });
+      });
+
+  const documents = await buildDocumentResponse(visibleDocuments, isAdmin);
+
+  // Filter groups: only show groups that have at least 1 visible document or are visible by own setting
+  const visibleDocGroupIds = new Set(documents.map((d) => d.groupId).filter(Boolean) as string[]);
+  const groups = isAdmin
+    ? allGroups
+    : allGroups.filter((g) => {
+        // A group is visible if the viewer can see the group AND it has at least 1 visible doc
+        if (!canViewerSeeGroup(viewer, {
+          visibility: g.visibility ?? "public",
+          userGroupIds: g.userGroupIds ?? [],
+        })) return false;
+        // Hide entire group if all its documents are invisible (Section 3.5)
+        return visibleDocGroupIds.has(g.id);
+      });
+
+  // Strip internal visibility fields from response for non-admin viewers
+  const responseDocuments = documents.map((document) => sanitizeDocumentForViewer(document, isAdmin));
+  const responseGroups = groups.map((group) => sanitizeGroupForViewer(group, isAdmin));
 
   // Attach user reading stats if authenticated
   let userStats: Record<string, { readCount: number; avgTimeSec: number | null }> | undefined;
@@ -52,7 +171,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ documents, groups, userStats });
+  return NextResponse.json({ documents: responseDocuments, groups: responseGroups, userStats });
 }
 
 export async function POST(request: NextRequest) {
@@ -68,7 +187,9 @@ export async function POST(request: NextRequest) {
       const body = await request.json();
       const title = (body.title as string | undefined)?.trim();
       const content = body.content as string | undefined;
-      const groupId = (body.groupId as string | null | undefined) ?? null;
+      const groupId = Object.prototype.hasOwnProperty.call(body, "groupId")
+        ? ((body.groupId as string | null | undefined) ?? null)
+        : undefined;
 
       if (!title || !content?.trim()) {
         return NextResponse.json(
@@ -103,7 +224,8 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file");
     const titleOverride = (formData.get("titleOverride") as string | null)?.trim() || null;
-    const groupId = (formData.get("groupId") as string | null) || null;
+    const rawGroupId = formData.get("groupId");
+    const groupId = rawGroupId === null ? undefined : ((rawGroupId as string | null) || null);
 
     if (!file || !(file instanceof File)) {
       return NextResponse.json(
@@ -257,29 +379,47 @@ export async function PATCH(request: NextRequest) {
 
     if (body.action === "move-document") {
       const documentId = body.documentId as string | undefined;
-      const groupId = body.groupId as string | undefined;
+      const groupId = Object.prototype.hasOwnProperty.call(body, "groupId")
+        ? ((body.groupId as string | null | undefined) ?? null)
+        : undefined;
+      const visibilityChoice = body.visibilityChoice as MoveDocumentVisibilityChoice | undefined;
 
-      if (!documentId || !groupId) {
+      if (!documentId || groupId === undefined) {
         return NextResponse.json(
           { error: "documentId and groupId are required" },
           { status: 400 }
         );
       }
 
-      const document = moveDocumentToGroup(documentId, groupId);
-      if (!document) {
+      const result = moveDocumentWithVisibilityHandling(documentId, groupId, visibilityChoice);
+      if (result.status === "not_found") {
         return NextResponse.json(
           { error: "Document or target group not found" },
           { status: 404 }
         );
       }
 
+      if (result.status === "confirmation_required") {
+        return NextResponse.json(
+          {
+            error: "Visibility change confirmation required",
+            confirmation: result.confirmation,
+          },
+          { status: 409 }
+        );
+      }
+
+      const document = {
+        ...result.document,
+        userGroupIds: getDocumentUserGroupIds(result.document.id),
+      };
+
       logAdminAudit(
         patchAuth.user!.id,
         "document_edited",
         "document",
         documentId,
-        JSON.stringify({ action: "move-document", groupId })
+        JSON.stringify({ action: "move-document", groupId, visibilityChoice })
       );
 
       return NextResponse.json({ document });

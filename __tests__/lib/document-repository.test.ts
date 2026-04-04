@@ -16,11 +16,15 @@ import {
   searchDocuments,
   deleteDocument,
   moveDocumentToGroup,
+  moveDocumentWithVisibilityHandling,
+  getDocumentUserGroupIds,
 } from "@/lib/repositories/document-repository";
 import {
   createDocumentGroup,
   listDocumentGroups,
+  setDocumentGroupVisibility,
 } from "@/lib/repositories/document-group-repository";
+import { createUserGroup } from "@/lib/repositories/user-group-repository";
 
 describe("document-repository", () => {
   beforeEach(() => {
@@ -78,6 +82,50 @@ describe("document-repository", () => {
     expect(groups[0].name).toBe("My Books");
   });
 
+  it("creates an ungrouped document with admin-only override when groupId is null", () => {
+    const doc = createDocument({
+      title: "Standalone",
+      content: "Hidden by default",
+      originalFilename: "standalone.txt",
+      fileType: "txt",
+      fileSize: 24,
+      uploadedBy: "user-1",
+      groupId: null,
+    });
+
+    expect(doc.groupId).toBeNull();
+    expect(doc.accessOverride).toBe(true);
+    expect(doc.visibility).toBe("admin_only");
+
+    const fetched = getDocumentById(doc.id);
+    expect(fetched?.groupId).toBeNull();
+    expect(fetched?.accessOverride).toBe(true);
+    expect(fetched?.visibility).toBe("admin_only");
+  });
+
+  it("creates a grouped document in inherit mode when a target group is provided", () => {
+    const targetGroup = createDocumentGroup({
+      userId: "user-1",
+      name: "Reading List",
+    });
+    const userGroup = createUserGroup({ name: "Class A" });
+    setDocumentGroupVisibility(targetGroup.id, "user_groups", [userGroup.id]);
+
+    const doc = createDocument({
+      title: "Inherited Book",
+      content: "Inherits its shelf access.",
+      originalFilename: "inherited.txt",
+      fileType: "txt",
+      fileSize: 30,
+      uploadedBy: "user-1",
+      groupId: targetGroup.id,
+    });
+
+    expect(doc.groupId).toBe(targetGroup.id);
+    expect(doc.accessOverride).toBe(false);
+    expect(doc.visibility).toBe("user_groups");
+  });
+
   it("moves a document into another group", () => {
     const doc = createDocument({
       title: "Move Me",
@@ -95,6 +143,101 @@ describe("document-repository", () => {
     const moved = moveDocumentToGroup(doc.id, otherGroup.id);
     expect(moved).not.toBeNull();
     expect(moved!.groupId).toBe(otherGroup.id);
+  });
+
+  it("requires confirmation when moving between groups with different effective visibility", () => {
+    const sourceGroup = createDocumentGroup({
+      userId: "user-1",
+      name: "Public Shelf",
+    });
+    const targetGroup = createDocumentGroup({
+      userId: "user-1",
+      name: "Admin Shelf",
+    });
+    setDocumentGroupVisibility(targetGroup.id, "admin_only", []);
+
+    const doc = createDocument({
+      title: "Needs Review",
+      content: "Visibility will change after moving.",
+      originalFilename: "review.txt",
+      fileType: "txt",
+      fileSize: 36,
+      uploadedBy: "user-1",
+      groupId: sourceGroup.id,
+    });
+
+    const result = moveDocumentWithVisibilityHandling(doc.id, targetGroup.id);
+
+    expect(result.status).toBe("confirmation_required");
+    if (result.status === "confirmation_required") {
+      expect(result.confirmation.currentVisibility.visibility).toBe("public");
+      expect(result.confirmation.targetVisibility.visibility).toBe("admin_only");
+      expect(result.confirmation.sourceGroupName).toBe("Public Shelf");
+      expect(result.confirmation.targetGroupName).toBe("Admin Shelf");
+    }
+  });
+
+  it("can preserve current visibility as an override when moving to a different shelf", () => {
+    const sourceGroup = createDocumentGroup({
+      userId: "user-1",
+      name: "Group Shelf",
+    });
+    const targetGroup = createDocumentGroup({
+      userId: "user-1",
+      name: "Admins Only",
+    });
+    const classGroup = createUserGroup({ name: "Class B" });
+    setDocumentGroupVisibility(sourceGroup.id, "user_groups", [classGroup.id]);
+    setDocumentGroupVisibility(targetGroup.id, "admin_only", []);
+
+    const doc = createDocument({
+      title: "Keep Access",
+      content: "Move me but keep my current audience.",
+      originalFilename: "keep-access.txt",
+      fileType: "txt",
+      fileSize: 39,
+      uploadedBy: "user-1",
+      groupId: sourceGroup.id,
+    });
+
+    const result = moveDocumentWithVisibilityHandling(doc.id, targetGroup.id, "preserve_current");
+
+    expect(result.status).toBe("moved");
+    if (result.status === "moved") {
+      expect(result.document.groupId).toBe(targetGroup.id);
+      expect(result.document.accessOverride).toBe(true);
+      expect(result.document.visibility).toBe("user_groups");
+      expect(getDocumentUserGroupIds(result.document.id)).toEqual([classGroup.id]);
+    }
+  });
+
+  it("keeps the current effective visibility when moving into the ungrouped area", () => {
+    const sourceGroup = createDocumentGroup({
+      userId: "user-1",
+      name: "Shared Shelf",
+    });
+    const classGroup = createUserGroup({ name: "Class C" });
+    setDocumentGroupVisibility(sourceGroup.id, "user_groups", [classGroup.id]);
+
+    const doc = createDocument({
+      title: "Ungroup Me",
+      content: "I should keep my current restrictions.",
+      originalFilename: "ungroup-me.txt",
+      fileType: "txt",
+      fileSize: 41,
+      uploadedBy: "user-1",
+      groupId: sourceGroup.id,
+    });
+
+    const result = moveDocumentWithVisibilityHandling(doc.id, null);
+
+    expect(result.status).toBe("moved");
+    if (result.status === "moved") {
+      expect(result.document.groupId).toBeNull();
+      expect(result.document.accessOverride).toBe(true);
+      expect(result.document.visibility).toBe("user_groups");
+      expect(getDocumentUserGroupIds(result.document.id)).toEqual([classGroup.id]);
+    }
   });
 
   it("lists all documents newest first", () => {
