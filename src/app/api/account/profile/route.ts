@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     profile: {
       id: user.id,
       email: user.email,
+      googleId: user.googleId,
       name: user.name,
       nickname: user.nickname,
       avatarUrl: user.avatarUrl,

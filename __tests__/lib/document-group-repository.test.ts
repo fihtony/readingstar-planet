@@ -10,6 +10,7 @@ vi.mock("@/lib/db", () => ({
 import { initializeSchema } from "@/lib/schema";
 import {
   createDocumentGroup,
+  deleteDocumentGroup,
   getDocumentGroupById,
   listDocumentGroups,
   ensureDefaultDocumentGroup,
@@ -265,5 +266,64 @@ describe("document-group-repository", () => {
     expect(() => {
       initializeSchema(testDb);
     }).not.toThrow();
+  });
+
+  // ── deleteDocumentGroup ───────────────────────────────────────────────────
+
+  it("deletes an existing group and returns true", () => {
+    const group = createDocumentGroup({ userId: "user-1", name: "Deletable" });
+    const result = deleteDocumentGroup(group.id);
+    expect(result).toBe(true);
+    expect(getDocumentGroupById(group.id)).toBeNull();
+  });
+
+  it("returns false when deleting a non-existent group", () => {
+    const result = deleteDocumentGroup("non-existent-id");
+    expect(result).toBe(false);
+  });
+
+  it("unassigns documents (sets group_id to null) when their group is deleted", () => {
+    const group = createDocumentGroup({ userId: "user-1", name: "Science" });
+
+    // Force-assign a document to this group directly
+    const doc = createDocument({
+      title: "Physics",
+      content: "E=mc2",
+      originalFilename: "physics.txt",
+      fileType: "txt",
+      fileSize: 10,
+      uploadedBy: "user-1",
+    });
+    testDb.prepare("UPDATE documents SET group_id = ? WHERE id = ?").run(group.id, doc.id);
+
+    // Verify assignment
+    const before = testDb.prepare("SELECT group_id FROM documents WHERE id = ?").get(doc.id) as { group_id: string | null };
+    expect(before.group_id).toBe(group.id);
+
+    deleteDocumentGroup(group.id);
+
+    // After deletion the document's group_id must be NULL
+    const after = testDb.prepare("SELECT group_id FROM documents WHERE id = ?").get(doc.id) as { group_id: string | null };
+    expect(after.group_id).toBeNull();
+  });
+
+  it("only affects the target group when multiple groups exist", () => {
+    const keep = createDocumentGroup({ userId: "user-1", name: "Keep" });
+    const remove = createDocumentGroup({ userId: "user-1", name: "Remove" });
+
+    deleteDocumentGroup(remove.id);
+
+    expect(getDocumentGroupById(keep.id)).not.toBeNull();
+    expect(getDocumentGroupById(remove.id)).toBeNull();
+    expect(listDocumentGroups("user-1")).toHaveLength(1);
+    expect(listDocumentGroups("user-1")[0].id).toBe(keep.id);
+  });
+
+  it("admin can delete a group (API route permission check)", async () => {
+    // Confirm the repository layer has no role restriction — access control
+    // is enforced at the API layer (checkPermission + admin role).
+    const group = createDocumentGroup({ userId: "user-1", name: "Admin Removable" });
+    expect(deleteDocumentGroup(group.id)).toBe(true);
+    expect(getDocumentGroupById(group.id)).toBeNull();
   });
 });

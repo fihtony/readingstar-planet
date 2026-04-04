@@ -11,7 +11,6 @@ import type {
   FontFamily,
   Locale,
   ReadingTheme,
-  RegistrationPolicy,
   UserSettings,
 } from "@/types";
 
@@ -24,16 +23,6 @@ const THEMES: { value: ReadingTheme; icon: string; label: string }[] = [
   { value: "magnifier", icon: "🔍", label: "Magnifier" },
   { value: "magic-wand", icon: "✨", label: "Magic Wand" },
 ];
-const FONT_FAMILY_OPTIONS: { value: FontFamily; label: string }[] = [
-  { value: "opendyslexic", label: "OpenDyslexic" },
-  { value: "system", label: "System" },
-];
-
-type GlobalDefaults = Pick<
-  UserSettings,
-  "fontFamily" | "fontSize" | "lineSpacing" | "maskOpacity" | "ttsSpeed" | "ttsPitch" | "theme"
->;
-
 const DEFAULT_SETTINGS: UserSettings = {
   userId: "guest",
   fontFamily: "opendyslexic",
@@ -47,16 +36,6 @@ const DEFAULT_SETTINGS: UserSettings = {
   theme: "flashlight",
   locale: "en",
   updatedAt: "",
-};
-
-const DEFAULT_GLOBAL_DEFAULTS: GlobalDefaults = {
-  fontFamily: "opendyslexic",
-  fontSize: 20,
-  lineSpacing: 1.8,
-  maskOpacity: 0.7,
-  ttsSpeed: 0.8,
-  ttsPitch: 1.05,
-  theme: "flashlight",
 };
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number) {
@@ -99,18 +78,6 @@ function normalizeSettings(raw?: Partial<UserSettings> | null): UserSettings {
       typeof raw?.updatedAt === "string" && raw.updatedAt.length > 0
         ? raw.updatedAt
         : new Date().toISOString(),
-  };
-}
-
-function normalizeGlobalDefaults(raw?: Partial<GlobalDefaults> | null): GlobalDefaults {
-  return {
-    fontFamily: normalizeFontFamily(raw?.fontFamily),
-    fontSize: clampNumber(raw?.fontSize, DEFAULT_GLOBAL_DEFAULTS.fontSize, 14, 32),
-    lineSpacing: clampNumber(raw?.lineSpacing, DEFAULT_GLOBAL_DEFAULTS.lineSpacing, 1.5, 2.5),
-    maskOpacity: clampNumber(raw?.maskOpacity, DEFAULT_GLOBAL_DEFAULTS.maskOpacity, 0, 0.9),
-    ttsSpeed: clampNumber(raw?.ttsSpeed, DEFAULT_GLOBAL_DEFAULTS.ttsSpeed, 0.5, 2),
-    ttsPitch: clampNumber(raw?.ttsPitch, DEFAULT_GLOBAL_DEFAULTS.ttsPitch, 0.5, 2),
-    theme: normalizeTheme(raw?.theme),
   };
 }
 
@@ -429,18 +396,6 @@ export default function SettingsPage() {
           Sign in to save your settings permanently. Guest changes stay in this tab only and do not migrate after login.
         </div>
       )}
-
-      {isAuthenticated && (
-        <div className="rounded-2xl border-2 border-sky-100 bg-sky-50 p-4 text-sm text-sky-800">
-          Manage your nickname, avatar, and account settings on the{" "}
-          <a href="/profile" className="font-semibold underline hover:text-sky-600">
-            Profile page
-          </a>
-          .
-        </div>
-      )}
-
-      {isAdmin && <AdminGlobalSettingsSection />}
     </div>
   );
 }
@@ -570,318 +525,5 @@ function VoiceSettingsSection({
         </div>
       </div>
     </SettingsSection>
-  );
-}
-
-function AdminGlobalSettingsSection() {
-  const csrfFetch = useCsrfFetch();
-  const [settings, setSettings] = useState<GlobalDefaults | null>(null);
-  const [registrationPolicy, setRegistrationPolicy] = useState<RegistrationPolicy>(
-    "invite-only"
-  );
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadAdminSettings = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch("/api/admin/settings");
-        if (!response.ok) {
-          throw new Error("Failed to load admin settings");
-        }
-
-        const data = await response.json();
-        if (!cancelled) {
-          setSettings(normalizeGlobalDefaults(data.settings));
-          setRegistrationPolicy(
-            data.registrationPolicy === "open" ? "open" : "invite-only"
-          );
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Failed to load admin settings"
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void loadAdminSettings();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const updateGlobalSetting = useCallback(
-    async <K extends keyof GlobalDefaults>(
-      key: K,
-      value: GlobalDefaults[K]
-    ) => {
-      if (!settings) {
-        return;
-      }
-
-      const previousSettings = settings;
-      const nextSettings = normalizeGlobalDefaults({ ...settings, [key]: value });
-      setSettings(nextSettings);
-      setSaving(true);
-      setError(null);
-
-      try {
-        const response = await csrfFetch("/api/admin/settings", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ [key]: value }),
-        });
-
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          throw new Error(data.error || "Failed to save global settings");
-        }
-
-        const data = await response.json();
-        setSettings(normalizeGlobalDefaults(data.settings));
-        setRegistrationPolicy(
-          data.registrationPolicy === "open" ? "open" : "invite-only"
-        );
-      } catch (saveError) {
-        setSettings(previousSettings);
-        setError(
-          saveError instanceof Error
-            ? saveError.message
-            : "Failed to save global settings"
-        );
-      } finally {
-        setSaving(false);
-      }
-    },
-    [csrfFetch, settings]
-  );
-
-  const updateRegistrationPolicy = useCallback(
-    async (nextPolicy: RegistrationPolicy) => {
-      if (nextPolicy === registrationPolicy) {
-        return;
-      }
-
-      const confirmed = window.confirm(
-        `Switch registration policy to ${
-          nextPolicy === "open" ? "Open Registration" : "Invite Only"
-        }?`
-      );
-      if (!confirmed) {
-        return;
-      }
-
-      setSaving(true);
-      setError(null);
-
-      try {
-        const response = await csrfFetch("/api/admin/registration-policy", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ policy: nextPolicy }),
-        });
-
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          throw new Error(data.error || "Failed to update registration policy");
-        }
-
-        const data = await response.json();
-        setRegistrationPolicy(data.policy === "open" ? "open" : "invite-only");
-      } catch (saveError) {
-        setError(
-          saveError instanceof Error
-            ? saveError.message
-            : "Failed to update registration policy"
-        );
-      } finally {
-        setSaving(false);
-      }
-    },
-    [csrfFetch, registrationPolicy]
-  );
-
-  return (
-    <section className="rounded-2xl border-2 border-amber-200 bg-amber-50 p-5 relative overflow-hidden">
-      {/* Subtle decorative stripe on the left edge */}
-      <div className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl bg-amber-400" aria-hidden="true" />
-      <h2 className="mb-1 text-lg font-bold text-amber-900">🛡️ Admin: Global Defaults</h2>
-      <p className="mb-4 text-xs font-medium text-amber-700/70 uppercase tracking-wide">Admin only</p>
-      {loading || !settings ? (
-        <p className="text-sm text-gray-500">Loading admin settings...</p>
-      ) : (
-        <div className="flex flex-col gap-5">
-          <p className="text-sm text-gray-600">
-            These defaults affect guests and new users. Existing personal overrides are preserved.
-          </p>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">Default Font Family</label>
-            <div className="flex gap-2 flex-wrap">
-              {FONT_FAMILY_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  className={`btn-kid rounded-xl px-4 py-2 text-sm ${
-                    settings.fontFamily === option.value
-                      ? "border-2 border-amber-300 bg-amber-100 text-amber-800"
-                      : "border-2 border-gray-200 bg-gray-50 text-gray-600"
-                  }`}
-                  onClick={() => void updateGlobalSetting("fontFamily", option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">Default Font Size</label>
-            <div className="flex gap-2 flex-wrap">
-              {FONT_SIZE_OPTIONS.map((size) => (
-                <button
-                  key={size}
-                  className={`btn-kid rounded-xl px-3 py-2 text-sm ${
-                    settings.fontSize === size
-                      ? "border-2 border-amber-300 bg-amber-100 text-amber-800"
-                      : "border-2 border-gray-200 bg-gray-50 text-gray-600"
-                  }`}
-                  onClick={() => void updateGlobalSetting("fontSize", size)}
-                >
-                  {size}px
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">Default Line Spacing</label>
-            <div className="flex gap-2 flex-wrap">
-              {LINE_SPACING_OPTIONS.map((spacing) => (
-                <button
-                  key={spacing}
-                  className={`btn-kid rounded-xl px-4 py-2 text-sm ${
-                    settings.lineSpacing === spacing
-                      ? "border-2 border-amber-300 bg-amber-100 text-amber-800"
-                      : "border-2 border-gray-200 bg-gray-50 text-gray-600"
-                  }`}
-                  onClick={() => void updateGlobalSetting("lineSpacing", spacing)}
-                >
-                  {spacing.toFixed(1)}x
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">
-              Default Mask Opacity: {Math.round(settings.maskOpacity * 100)}%
-            </label>
-            <input
-              type="range"
-              min={0}
-              max={0.9}
-              step={0.1}
-              value={settings.maskOpacity}
-              onChange={(event) =>
-                void updateGlobalSetting("maskOpacity", Number(event.target.value))
-              }
-              className="w-full max-w-xs"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">
-              Default TTS Speed: {settings.ttsSpeed.toFixed(1)}x
-            </label>
-            <input
-              type="range"
-              min={0.5}
-              max={2}
-              step={0.1}
-              value={settings.ttsSpeed}
-              onChange={(event) =>
-                void updateGlobalSetting("ttsSpeed", Number(event.target.value))
-              }
-              className="w-full max-w-xs"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">
-              Default TTS Pitch: {settings.ttsPitch.toFixed(2)}
-            </label>
-            <input
-              type="range"
-              min={0.5}
-              max={2}
-              step={0.05}
-              value={settings.ttsPitch}
-              onChange={(event) =>
-                void updateGlobalSetting("ttsPitch", Number(event.target.value))
-              }
-              className="w-full max-w-xs"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">Default Theme</label>
-            <div className="flex gap-2 flex-wrap">
-              {THEMES.map((theme) => (
-                <button
-                  key={theme.value}
-                  className={`btn-kid rounded-xl px-4 py-3 text-sm ${
-                    settings.theme === theme.value
-                      ? "border-2 border-amber-300 bg-amber-100 text-amber-800"
-                      : "border-2 border-gray-200 bg-gray-50 text-gray-600"
-                  }`}
-                  onClick={() => void updateGlobalSetting("theme", theme.value)}
-                >
-                  {theme.icon} {theme.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium">Registration Policy</label>
-            <div className="flex gap-2 flex-wrap">
-              {[
-                { value: "invite-only" as RegistrationPolicy, label: "Invite Only" },
-                { value: "open" as RegistrationPolicy, label: "Open Registration" },
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  className={`btn-kid rounded-xl px-4 py-2 text-sm ${
-                    registrationPolicy === option.value
-                      ? "border-2 border-amber-300 bg-amber-100 text-amber-800"
-                      : "border-2 border-gray-200 bg-gray-50 text-gray-600"
-                  }`}
-                  onClick={() => void updateRegistrationPolicy(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {saving && <p className="mt-4 text-xs text-amber-700">Saving admin settings...</p>}
-      {error && <p className="mt-4 text-sm text-orange-600">{error}</p>}
-    </section>
   );
 }

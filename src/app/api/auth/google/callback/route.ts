@@ -13,6 +13,7 @@ import {
 import { createUser, updateUser } from "@/lib/repositories/user-repository";
 import { getClientIp } from "@/lib/permissions";
 import { getAppUrl } from "@/lib/app-url";
+import { logger } from "@/lib/logger";
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? "";
@@ -38,12 +39,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(getAppUrl(request, "/library"));
   }
 
+  // Read and clear the nonce cookie set during login initiation
+  const nonce = request.cookies.get("rs_oauth_nonce")?.value ?? undefined;
+
   try {
     // Exchange authorization code for tokens
     const { tokens } = await client.getToken(code);
     const ticket = await client.verifyIdToken({
       idToken: tokens.id_token!,
       audience: GOOGLE_CLIENT_ID,
+      ...(nonce ? { nonce } : {}),
     });
 
     const payload = ticket.getPayload();
@@ -87,9 +92,16 @@ export async function GET(request: NextRequest) {
       });
     } else {
       // Existing user – check status
-      if (user.status === "deleted" || user.status === "inactive") {
+      if (user.status === "deleted") {
+        // Treat deleted accounts the same as unknown users in invite-only mode:
+        // do not reveal that the account previously existed.
         return NextResponse.redirect(
-          getAppUrl(request, "/library?error=account_disabled")
+          getAppUrl(request, "/library?error=invite_only")
+        );
+      }
+      if (user.status === "inactive") {
+        return NextResponse.redirect(
+          getAppUrl(request, "/library?error=invite_only")
         );
       }
 
@@ -136,9 +148,12 @@ export async function GET(request: NextRequest) {
     // Update last_login_at
     updateUser(user.id, { lastLoginAt: new Date().toISOString() });
 
-    return NextResponse.redirect(getAppUrl(request, "/library"));
+    const redirectResponse = NextResponse.redirect(getAppUrl(request, "/library"));
+    // Clear the one-time nonce cookie
+    redirectResponse.cookies.delete("rs_oauth_nonce");
+    return redirectResponse;
   } catch (error) {
-    console.error("OAuth callback error:", error);
+    logger.error("oauth-callback", "OAuth callback error", error);
     return NextResponse.redirect(
       getAppUrl(request, "/library?error=auth_failed")
     );

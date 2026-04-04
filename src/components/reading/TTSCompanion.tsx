@@ -3,6 +3,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { splitIntoWords } from "@/lib/text-processor";
+import { isWindowsBrowser } from "@/lib/platform";
 
 interface TTSCompanionProps {
   isPlaying: boolean;
@@ -151,13 +152,16 @@ export function TTSHighlightedText({
   currentWordIndex,
   isPlaying,
 }: TTSHighlightedTextProps) {
+  // On Windows, TTS word-boundary timing is inaccurate — skip the highlight.
+  const disableHighlight = isWindowsBrowser();
+
   return (
     <span>
       {words.map((word, i) => (
         <React.Fragment key={i}>
           <span
             className={
-              isPlaying && i === currentWordIndex
+              !disableHighlight && isPlaying && i === currentWordIndex
                 ? "tts-word-active"
                 : ""
             }

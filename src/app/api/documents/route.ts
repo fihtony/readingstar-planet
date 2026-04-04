@@ -7,6 +7,7 @@ import { sanitizeTextContent } from "@/lib/text-processor";
 import { checkPermission, getClientIp } from "@/lib/permissions";
 import { getAuthContext, logAdminAudit, logUserActivity } from "@/lib/auth";
 import { recordUserRead, getUserStatsMap } from "@/lib/repositories/reading-stats-repository";
+import { logger } from "@/lib/logger";
 
 export async function GET(request: NextRequest) {
   const { authContext } = await checkPermission(request, "public");
@@ -161,7 +162,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ document: doc }, { status: 201 });
   } catch (error) {
-    console.error("Upload error:", error);
+    logger.error("documents", "Upload error", error);
     return NextResponse.json(
       { error: "Something went wrong processing the file." },
       { status: 500 }

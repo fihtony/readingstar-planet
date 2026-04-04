@@ -10,7 +10,10 @@ import { getClientIp } from "@/lib/permissions";
 import { createUser, updateUser } from "@/lib/repositories/user-repository";
 import type { User, UserRole, UserStatus } from "@/types";
 
-const TEST_AUTH_ENABLED = process.env.READINGSTAR_ENABLE_TEST_AUTH === "1";
+// Test auth is completely disabled in production regardless of any env var.
+const TEST_AUTH_ENABLED =
+  process.env.NODE_ENV !== "production" &&
+  process.env.READINGSTAR_ENABLE_TEST_AUTH === "1";
 
 type SessionSeedInput = {
   email: string;

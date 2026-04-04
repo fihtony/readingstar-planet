@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "crypto";
+import { randomBytes, randomUUID, createHmac } from "crypto";
 import { cookies } from "next/headers";
 import { getDatabase } from "./db";
 import type { User, AuthSession, DeviceType } from "@/types";
@@ -7,10 +7,11 @@ const SESSION_COOKIE_NAME = "rs_session";
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 function shouldUseSecureCookies(): boolean {
-  return (
-    process.env.NODE_ENV === "production"
-    && process.env.READINGSTAR_ENABLE_TEST_AUTH !== "1"
-  );
+  // In production, always use secure cookies regardless of any test-auth flag.
+  if (process.env.NODE_ENV === "production") {
+    return true;
+  }
+  return false;
 }
 
 // ─── User-Agent parsing helpers ──────────────────────────────────────────────
@@ -274,7 +275,7 @@ export async function setSessionCookie(sessionId: string): Promise<void> {
   cookieStore.set(SESSION_COOKIE_NAME, sessionId, {
     httpOnly: true,
     secure: shouldUseSecureCookies(),
-    sameSite: "lax",
+    sameSite: "strict",
     path: "/",
     maxAge: SESSION_DURATION_MS / 1000,
   });
@@ -289,49 +290,82 @@ export async function clearSessionCookie(): Promise<void> {
 }
 
 // ─── CSRF Token helpers ──────────────────────────────────────────────────────
+//
+// Uses a Signed Double-Submit pattern: the CSRF token is an HMAC-SHA256 of the
+// session cookie value using a server-side secret.  No cookie with
+// httpOnly: false is required — the token is returned only via the JSON body of
+// GET /api/auth/csrf and the client stores it in memory (React state).
+// Validation re-derives the expected HMAC from the current session cookie and
+// compares it using a constant-time check.
 
-const CSRF_COOKIE_NAME = "rs_csrf";
 const CSRF_HEADER_NAME = "x-csrf-token";
 
+function getCsrfSecret(): string {
+  return process.env.READINGSTAR_CSRF_SECRET ?? process.env.NEXTAUTH_SECRET ?? "readingstar-csrf-fallback";
+}
+
+/**
+ * Generate a CSRF token bound to the current session (HMAC of session ID).
+ * Returns the token string — no cookie is set.
+ */
 export async function generateCsrfToken(): Promise<string> {
-  const token = randomBytes(32).toString("hex");
   const cookieStore = await cookies();
-  cookieStore.set(CSRF_COOKIE_NAME, token, {
-    httpOnly: false, // JS needs to read this
-    secure: shouldUseSecureCookies(),
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_DURATION_MS / 1000,
-  });
-  return token;
+  const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value ?? randomBytes(16).toString("hex");
+  return createHmac("sha256", getCsrfSecret()).update(sessionId).digest("hex");
 }
 
 export async function validateCsrfToken(headerToken: string | null): Promise<boolean> {
-  const cookieStore = await cookies();
-  const cookieToken = cookieStore.get(CSRF_COOKIE_NAME)?.value;
-  if (!cookieToken || !headerToken) return false;
-  // Constant-time comparison
-  if (cookieToken.length !== headerToken.length) return false;
+  if (!headerToken) return false;
+  const expected = await generateCsrfToken();
+  if (expected.length !== headerToken.length) return false;
   let result = 0;
-  for (let i = 0; i < cookieToken.length; i++) {
-    result |= cookieToken.charCodeAt(i) ^ headerToken.charCodeAt(i);
+  for (let i = 0; i < expected.length; i++) {
+    result |= expected.charCodeAt(i) ^ headerToken.charCodeAt(i);
   }
   return result === 0;
 }
 
-// ─── Rate limiting (in-memory, per-process) ──────────────────────────────────
+// ─── Rate limiting (SQLite-backed, survives restarts and multi-process) ───────
 
-const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const LOGIN_RATE_WINDOW_MS = 60_000;   // 1-minute window
+const LOGIN_RATE_MAX_ATTEMPTS = 10;    // max attempts per window
+const RATE_LIMIT_PRUNE_INTERVAL = 60_000; // prune stale rows every 60 s
 
-export function checkLoginRateLimit(ip: string): boolean {
+let lastPruneAt = 0;
+
+/** Prune rows older than the largest window we track (1 hour buffer). */
+function pruneRateLimitLog(): void {
   const now = Date.now();
-  const entry = loginAttempts.get(ip);
-  if (!entry || now > entry.resetAt) {
-    loginAttempts.set(ip, { count: 1, resetAt: now + 60_000 });
-    return true;
-  }
-  entry.count++;
-  return entry.count <= 10;
+  if (now - lastPruneAt < RATE_LIMIT_PRUNE_INTERVAL) return;
+  lastPruneAt = now;
+  getDatabase()
+    .prepare("DELETE FROM rate_limit_log WHERE attempt_at < datetime('now', '-1 hour')")
+    .run();
+}
+
+/**
+ * Record an attempt and return true when within limit, false when rate-limited.
+ * `key` is typically an IP address; `maxAttempts` and `windowMs` are configurable.
+ */
+export function checkRateLimit(
+  key: string,
+  maxAttempts: number = LOGIN_RATE_MAX_ATTEMPTS,
+  windowMs: number = LOGIN_RATE_WINDOW_MS
+): boolean {
+  const db = getDatabase();
+  pruneRateLimitLog();
+  const windowSec = windowMs / 1000;
+  const row = db.prepare(
+    `SELECT COUNT(*) AS count FROM rate_limit_log WHERE key = ? AND attempt_at > datetime('now', '-' || ? || ' seconds')`
+  ).get(key, windowSec) as { count: number };
+  if (row.count >= maxAttempts) return false;
+  db.prepare("INSERT INTO rate_limit_log (key) VALUES (?)").run(key);
+  return true;
+}
+
+/** Convenience wrapper for login rate limiting. */
+export function checkLoginRateLimit(ip: string): boolean {
+  return checkRateLimit(ip, LOGIN_RATE_MAX_ATTEMPTS, LOGIN_RATE_WINDOW_MS);
 }
 
 // ─── Activity & Audit logging ────────────────────────────────────────────────

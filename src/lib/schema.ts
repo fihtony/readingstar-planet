@@ -184,6 +184,14 @@ export function initializeSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_reading_progress_user_doc ON reading_progress(user_id, document_id);
     CREATE INDEX IF NOT EXISTS idx_achievements_user ON achievements(user_id);
     CREATE INDEX IF NOT EXISTS idx_app_metadata_updated_at ON app_metadata(updated_at);
+
+    CREATE TABLE IF NOT EXISTS rate_limit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT NOT NULL,
+      attempt_at DATETIME NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_rate_limit_log_key_time ON rate_limit_log(key, attempt_at);
   `);
 
   migrateUsersTable(db);

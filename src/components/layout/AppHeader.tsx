@@ -169,13 +169,22 @@ export function AppHeader() {
                     ⚙️ {nav("settings")}
                   </Link>
                   {isAdmin && (
-                    <Link
-                      href="/admin/users"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-sky-50"
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      👥 User Management
-                    </Link>
+                    <>
+                      <Link
+                        href="/admin/users"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-sky-50"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        👥 User Management
+                      </Link>
+                      <Link
+                        href="/admin/settings"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-sky-50"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        🛡️ Admin Settings
+                      </Link>
+                    </>
                   )}
                   <button
                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-sky-50"

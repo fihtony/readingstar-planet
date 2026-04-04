@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateFile, titleFromFilename } from "@/lib/pdf-parser";
 import { extractTextFromPDF } from "@/lib/pdf-parser.server";
 import { sanitizeTextContent } from "@/lib/text-processor";
+import { logger } from "@/lib/logger";
 
 /**
  * POST /api/documents/preview
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ content, title });
   } catch (error) {
-    console.error("PDF preview error:", error);
+    logger.error("pdf-preview", "PDF preview error", error);
     return NextResponse.json(
       { error: "Failed to extract text from the PDF." },
       { status: 500 }

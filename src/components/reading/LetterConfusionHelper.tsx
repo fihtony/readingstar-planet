@@ -6,6 +6,7 @@ import {
   type TextSegment,
 } from "@/lib/letter-confusion";
 import type { LetterConfusionConfig } from "@/types";
+import { isWindowsBrowser } from "@/lib/platform";
 
 interface LetterConfusionHelperProps {
   text: string;
@@ -18,8 +19,12 @@ export function LetterConfusionHelper({
   config,
   activeWordIndex = -1,
 }: LetterConfusionHelperProps) {
+  // On Windows, TTS word-boundary timing is inaccurate — skip the highlight.
+  const disableHighlight = isWindowsBrowser();
+  const effectiveIndex = disableHighlight ? -1 : activeWordIndex;
+
   if (!config.enabled) {
-    return <PlainTextWithHighlight text={text} activeWordIndex={activeWordIndex} />;
+    return <PlainTextWithHighlight text={text} activeWordIndex={effectiveIndex} />;
   }
 
   const pieces = text.split(/(\s+)/);
@@ -35,7 +40,7 @@ export function LetterConfusionHelper({
         return (
           <span
             key={`piece-${pieceIndex}`}
-            className={pieceIndex / 2 === activeWordIndex ? "tts-word-active" : undefined}
+            className={pieceIndex / 2 === effectiveIndex ? "tts-word-active" : undefined}
           >
             {segments.map((segment, i) => (
               <AnnotatedSegment

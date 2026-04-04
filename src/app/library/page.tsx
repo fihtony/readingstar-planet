@@ -61,8 +61,32 @@ export default function LibraryPage() {
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [deletingDocTitle, setDeletingDocTitle] = useState("");
 
+  // Delete group confirmation
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
+  const [deletingGroupName, setDeletingGroupName] = useState("");
+
+  // Invite-only dialog
+  const [showInviteOnlyDialog, setShowInviteOnlyDialog] = useState(false);
+  const [requestEmail, setRequestEmail] = useState("");
+  const [requestMessage, setRequestMessage] = useState("");
+  const [requestBusy, setRequestBusy] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+
   useEffect(() => {
     fetchDocuments();
+  }, []);
+
+  // Detect invite_only redirect from Google OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("error") === "invite_only") {
+      setShowInviteOnlyDialog(true);
+      // Clean up URL without reloading
+      const url = new URL(window.location.href);
+      url.searchParams.delete("error");
+      window.history.replaceState({}, "", url.toString());
+    }
   }, []);
 
   const fetchDocuments = async () => {
@@ -138,6 +162,28 @@ export default function LibraryPage() {
     }
   };
 
+  const handleRequestAccess = async () => {
+    setRequestBusy(true);
+    setRequestError(null);
+    try {
+      const res = await fetch("/api/auth/request-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: requestEmail, message: requestMessage }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRequestError(data.error || "Failed to send request. Please try again.");
+        return;
+      }
+      setRequestSent(true);
+    } catch {
+      setRequestError("Network error. Please try again.");
+    } finally {
+      setRequestBusy(false);
+    }
+  };
+
   const handleCreateGroup = async () => {
     const trimmedName = groupName.trim();
     if (!trimmedName) {
@@ -175,6 +221,27 @@ export default function LibraryPage() {
   const openEditGroup = (group: DocumentGroup) => {
     setEditingGroupId(group.id);
     setEditingGroupName(group.name);
+  };
+
+  const confirmDeleteGroup = (group: DocumentGroup) => {
+    setDeletingGroupId(group.id);
+    setDeletingGroupName(group.name);
+  };
+
+  const handleDeleteGroup = async () => {
+    if (!deletingGroupId) return;
+    const id = deletingGroupId;
+    setDeletingGroupId(null);
+    try {
+      const res = await csrfFetch(`/api/document-groups?id=${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        await fetchDocuments();
+      }
+    } catch {
+      // Handle error silently
+    }
   };
 
   const handleUpdateDoc = async () => {
@@ -568,6 +635,19 @@ export default function LibraryPage() {
                           ✏️
                         </button>
                       )}
+                      {isAdmin && group.id !== "fallback-group" && (
+                        <button
+                          className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded-lg text-sm"
+                          title="Delete group"
+                          aria-label="Delete group"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            confirmDeleteGroup(group);
+                          }}
+                        >
+                          🗑️
+                        </button>
+                      )}
                     </div>
                   )}
                   <p className="text-xs text-gray-400">{t("booksCount", { count: groupDocuments.length })}</p>
@@ -643,6 +723,145 @@ export default function LibraryPage() {
                 {t("menuDelete")}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete group confirmation dialog */}
+      {deletingGroupId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={() => setDeletingGroupId(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <div className="text-4xl mb-3">🗂️</div>
+              <h2 className="text-lg font-black text-slate-800 mb-1">Delete Group?</h2>
+              <p className="text-sm text-gray-500 line-clamp-2">&ldquo;{deletingGroupName}&rdquo;</p>
+              <p className="text-xs text-gray-400 mt-2">Books in this group will be unassigned but not deleted.</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                className="flex-1 px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200"
+                onClick={() => setDeletingGroupId(null)}
+              >
+                {t("cancelButton")}
+              </button>
+              <button
+                className="flex-1 px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-medium hover:bg-red-600"
+                onClick={() => void handleDeleteGroup()}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite-only access request dialog */}
+      {showInviteOnlyDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {!requestSent ? (
+              <>
+                <div className="text-center">
+                  <div className="text-5xl mb-3">🔒</div>
+                  <h2 className="text-xl font-black text-slate-800 mb-2">Invitation Only</h2>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    This system is currently available to <span className="font-semibold">invited users only</span>.
+                    Please contact an administrator to request access.
+                  </p>
+                  <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+                    You can submit a request below with your Google account email address and a brief message.
+                    An administrator will review your request.
+                  </p>
+                  <p className="mt-2 text-xs text-gray-400">
+                    This system only supports login via Google.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Your Google Email Address <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      className="w-full rounded-xl border-2 border-gray-200 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none"
+                      placeholder="you@gmail.com"
+                      value={requestEmail}
+                      onChange={(e) => setRequestEmail(e.target.value)}
+                      disabled={requestBusy}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">
+                      Message <span className="text-gray-400">(optional)</span>
+                    </label>
+                    <textarea
+                      className="w-full resize-none rounded-xl border-2 border-gray-200 px-3 py-2 text-sm focus:border-sky-400 focus:outline-none"
+                      rows={3}
+                      placeholder="Briefly describe why you need access..."
+                      value={requestMessage}
+                      onChange={(e) => setRequestMessage(e.target.value)}
+                      maxLength={500}
+                      disabled={requestBusy}
+                    />
+                  </div>
+                  {requestError && (
+                    <p className="text-sm text-red-600">{requestError}</p>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    className="flex-1 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-700
+                      hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-1
+                      disabled:opacity-50"
+                    onClick={() => setShowInviteOnlyDialog(false)}
+                    disabled={requestBusy}
+                  >
+                    Close
+                  </button>
+                  <button
+                    className="flex-1 rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-bold text-white
+                      hover:bg-sky-600
+                      focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-1
+                      disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => void handleRequestAccess()}
+                    disabled={requestBusy || !requestEmail.trim()}
+                  >
+                    {requestBusy ? "Sending..." : "Send Request"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-center">
+                  <div className="text-5xl mb-3">✅</div>
+                  <h2 className="text-xl font-black text-slate-800 mb-2">Request Sent</h2>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    Your access request has been sent to the administrators.
+                    Please wait for them to review and grant you access before trying to log in again.
+                  </p>
+                </div>
+                <button
+                  className="rounded-xl bg-sky-500 px-4 py-2.5 text-sm font-bold text-white
+                    hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-1"
+                  onClick={() => setShowInviteOnlyDialog(false)}
+                >
+                  Close
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
