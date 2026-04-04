@@ -78,6 +78,7 @@ export default function AdminUsersPage() {
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("user");
   const [newNotes, setNewNotes] = useState("");
+  const [newUserGroupIds, setNewUserGroupIds] = useState<string[]>([]);
 
   // Edit form
   const [editRole, setEditRole] = useState<UserRole>("user");
@@ -85,7 +86,7 @@ export default function AdminUsersPage() {
   const [editUserGroupIds, setEditUserGroupIds] = useState<string[]>([]);
 
   const [actionLoading, setActionLoading] = useState(false);
-  const [activityUserId, setActivityUserId] = useState<string | null>(null);
+  const [activityUser, setActivityUser] = useState<AdminUserListItem | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -154,6 +155,7 @@ export default function AdminUsersPage() {
           email: newEmail.trim(),
           role: newRole,
           adminNotes: newNotes,
+          userGroupIds: newUserGroupIds,
         }),
       });
       if (!res.ok) {
@@ -165,6 +167,7 @@ export default function AdminUsersPage() {
       setNewEmail("");
       setNewRole("user");
       setNewNotes("");
+      setNewUserGroupIds([]);
       await fetchUsers();
     } catch {
       setError("Failed to create user");
@@ -374,7 +377,7 @@ export default function AdminUsersPage() {
               <tr
                 key={u.id}
                 className="border-t border-gray-100 hover:bg-gray-50/50 cursor-pointer"
-                onClick={() => setActivityUserId(u.id)}
+                onClick={() => setActivityUser(u)}
               >
                 <td className="px-3 py-3">
                   {u.avatarUrl ? (
@@ -505,7 +508,7 @@ export default function AdminUsersPage() {
 
       {/* Create User Dialog */}
       {creatingUser && (
-        <Dialog onClose={() => setCreatingUser(false)} title="Add User">
+        <Dialog onClose={() => { setCreatingUser(false); setNewUserGroupIds([]); }} title="Add User">
           <div className="flex flex-col gap-4">
             <div>
               <label className="text-sm font-medium block mb-1">Email *</label>
@@ -539,8 +542,32 @@ export default function AdminUsersPage() {
               />
               <p className="text-xs text-gray-400 mt-1">{newNotes.length}/{MAX_NOTE_LENGTH}</p>
             </div>
+            {userGroups.length > 0 && (
+              <div>
+                <label className="text-sm font-medium block mb-1">User Groups</label>
+                <div className="flex flex-wrap gap-2">
+                  {userGroups.map((g) => (
+                    <label key={g.id} className="flex items-center gap-1 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newUserGroupIds.includes(g.id)}
+                        onChange={(e) => {
+                          setNewUserGroupIds((prev) =>
+                            e.target.checked
+                              ? [...prev, g.id]
+                              : prev.filter((id) => id !== g.id)
+                          );
+                        }}
+                        className="rounded"
+                      />
+                      <span>{g.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex gap-3 justify-end">
-              <Button variant="ghost" onClick={() => setCreatingUser(false)}>
+              <Button variant="ghost" onClick={() => { setCreatingUser(false); setNewUserGroupIds([]); }}>
                 Cancel
               </Button>
               <Button variant="primary" onClick={() => void handleCreateUser()} disabled={actionLoading || !newEmail.trim()}>
@@ -641,10 +668,13 @@ export default function AdminUsersPage() {
       )}
 
       {/* User Activity Panel */}
-      {activityUserId && (
+      {activityUser && (
         <ActivityPanel
-          userId={activityUserId}
-          onClose={() => setActivityUserId(null)}
+          userId={activityUser.id}
+          userGroupNames={activityUser.userGroupIds
+            .map((gid) => userGroups.find((g) => g.id === gid)?.name)
+            .filter((n): n is string => Boolean(n))}
+          onClose={() => setActivityUser(null)}
         />
       )}
     </div>
@@ -730,9 +760,11 @@ function ActionLabel({ action }: { action: string }) {
 
 function ActivityPanel({
   userId,
+  userGroupNames,
   onClose,
 }: {
   userId: string;
+  userGroupNames: string[];
   onClose: () => void;
 }) {
   const [data, setData] = useState<ActivityData | null>(null);
@@ -778,6 +810,18 @@ function ActivityPanel({
             </h2>
             {data && (
               <p className="text-sm text-gray-500">{data.user.email}</p>
+            )}
+            {userGroupNames.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1">
+                {userGroupNames.map((name) => (
+                  <span
+                    key={name}
+                    className="inline-block rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600"
+                  >
+                    {name}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
           <div className="flex items-center gap-2">

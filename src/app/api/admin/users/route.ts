@@ -5,7 +5,7 @@ import {
   createUser,
   listAllUsers,
 } from "@/lib/repositories/user-repository";
-import { getUserGroupIds, listUserGroups } from "@/lib/repositories/user-group-repository";
+import { getUserGroupIds, listUserGroups, setUserGroups } from "@/lib/repositories/user-group-repository";
 import { getUserByEmail } from "@/lib/auth";
 import { getDatabase } from "@/lib/db";
 
@@ -148,6 +148,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const userGroupIds = Array.isArray(body.userGroupIds)
+    ? (body.userGroupIds as string[]).filter((id) => typeof id === "string")
+    : [];
+
   const db = getDatabase();
   const admin = authContext.user!;
   const ip = getClientIp(request);
@@ -159,6 +163,9 @@ export async function POST(request: NextRequest) {
       adminNotes,
       status: "pending_verification",
     });
+    if (userGroupIds.length > 0) {
+      setUserGroups(newUser.id, userGroupIds);
+    }
     logAdminAudit(admin.id, "user_created", "user", newUser.id, JSON.stringify({ email, role }));
     logUserActivity(admin.id, "admin_action", JSON.stringify({ action: "user_created", email }), ip);
     return newUser;

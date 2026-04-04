@@ -84,8 +84,8 @@ export function createDocumentGroup(input: {
   const position = maxPositionRow.max_position + 1;
 
   db.prepare(
-    `INSERT INTO document_groups (id, user_id, name, position, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO document_groups (id, user_id, name, position, visibility, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'admin_only', ?, ?)`
   ).run(id, input.userId, input.name.trim(), position, now, now);
 
   return {
@@ -93,7 +93,7 @@ export function createDocumentGroup(input: {
     userId: input.userId,
     name: input.name.trim(),
     position,
-    visibility: "public",
+    visibility: "admin_only",
     createdAt: now,
     updatedAt: now,
   };
