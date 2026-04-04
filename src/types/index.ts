@@ -50,7 +50,7 @@ export interface UserActivityLog {
   userId: string;
   action: string;
   detail: string;
-  ipAddress: string | null;
+  location: string | null;
   createdAt: string;
 }
 

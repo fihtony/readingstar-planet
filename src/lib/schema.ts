@@ -56,7 +56,7 @@ export function initializeSchema(db: Database.Database): void {
       user_id TEXT NOT NULL,
       action TEXT NOT NULL,
       detail TEXT NOT NULL DEFAULT '',
-      ip_address TEXT,
+      location TEXT,
       created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -242,6 +242,7 @@ export function initializeSchema(db: Database.Database): void {
   ensureDocumentGroupingSchema(db);
   migrateDocumentGroupVisibility(db);
   migrateDocumentVisibility(db);
+  migrateActivityLogLocation(db);
   seedDefaultAppMetadata(db);
   seedInitialAdmin(db);
 }
@@ -385,6 +386,19 @@ function migrateUsersTable(db: Database.Database): void {
     db.exec("ALTER TABLE users_new RENAME TO users");
 
     db.pragma("foreign_keys = ON");
+  }
+}
+
+/**
+ * Replace ip_address with location in user_activity_log (privacy compliance).
+ * For existing databases the ip_address column is left intact but no longer
+ * populated; a new location column is added instead.
+ */
+function migrateActivityLogLocation(db: Database.Database): void {
+  if (!hasColumn(db, "user_activity_log", "location")) {
+    db.prepare(
+      "ALTER TABLE user_activity_log ADD COLUMN location TEXT"
+    ).run();
   }
 }
 

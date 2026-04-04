@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { authContext } = await checkPermission(request, "public");
+    const { authorized, response, authContext } = await checkPermission(request, "public");
+    if (!authorized) return response!
     const body = await request.json();
     const { sessionId, documentId, focusMode, letterHelperEnabled, ttsUsed } = body;
 
@@ -91,7 +92,8 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { authContext } = await checkPermission(request, "public");
+    const { authorized, response, authContext } = await checkPermission(request, "public");
+    if (!authorized) return response!
     const body = await request.json();
     const { sessionId, linesRead, focusMode, letterHelperEnabled, ttsUsed } = body;
 

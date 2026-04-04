@@ -42,6 +42,7 @@ describe("reading-progress route", () => {
 
   it("treats guest progress writes as a no-op", async () => {
     routeMocks.checkPermission.mockResolvedValue({
+      authorized: true,
       authContext: { user: null },
     });
 
@@ -73,6 +74,7 @@ describe("reading-progress route", () => {
     };
 
     routeMocks.checkPermission.mockResolvedValue({
+      authorized: true,
       authContext: {
         user: { id: "real-user" },
       },

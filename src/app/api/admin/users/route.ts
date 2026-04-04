@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkPermission, getClientIp } from "@/lib/permissions";
+import { checkPermission, getLocationFromRequest } from "@/lib/permissions";
 import { logUserActivity, logAdminAudit } from "@/lib/auth";
 import {
   createUser,
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
 
   const db = getDatabase();
   const admin = authContext.user!;
-  const ip = getClientIp(request);
+  const location = getLocationFromRequest(request);
 
   const user = db.transaction(() => {
     const newUser = createUser({
@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
       setUserGroups(newUser.id, userGroupIds);
     }
     logAdminAudit(admin.id, "user_created", "user", newUser.id, JSON.stringify({ email, role }));
-    logUserActivity(admin.id, "admin_action", JSON.stringify({ action: "user_created", email }), ip);
+    logUserActivity(admin.id, "admin_action", JSON.stringify({ action: "user_created" }), location);
     return newUser;
   })();
 

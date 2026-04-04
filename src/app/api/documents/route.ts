@@ -15,7 +15,7 @@ import { listDocumentGroupsWithVisibility } from "@/lib/repositories/document-gr
 import { validateFile, extractTextFromTXT, titleFromFilename } from "@/lib/pdf-parser";
 import { extractTextFromPDF } from "@/lib/pdf-parser.server";
 import { sanitizeTextContent } from "@/lib/text-processor";
-import { checkPermission, getClientIp } from "@/lib/permissions";
+import { checkPermission, getLocationFromRequest } from "@/lib/permissions";
 import { getAuthContext, logAdminAudit, logUserActivity } from "@/lib/auth";
 import { recordUserRead, getUserStatsMap } from "@/lib/repositories/reading-stats-repository";
 import { getUserGroupIds } from "@/lib/repositories/user-group-repository";
@@ -332,8 +332,9 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
 
     if (body.action === "increment-read-count") {
-      // increment-read-count is public (anyone can read)
-      const { authContext: readAuth } = await checkPermission(request, "public");
+      // increment-read-count is public (anyone can read) but CSRF must still be valid
+      const { authorized: readAuthorized, response: readResponse, authContext: readAuth } = await checkPermission(request, "public");
+      if (!readAuthorized) return readResponse!;
       const documentId = body.documentId as string | undefined;
 
       if (!documentId) {

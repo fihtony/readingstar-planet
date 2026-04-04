@@ -137,6 +137,7 @@ describe("reading-sessions route", () => {
 
   it("treats guest session completion as a no-op", async () => {
     routeMocks.checkPermission.mockResolvedValue({
+      authorized: true,
       authContext: { user: null },
     });
 
@@ -156,6 +157,7 @@ describe("reading-sessions route", () => {
 
   it("rejects attempts to finish another user's session", async () => {
     routeMocks.checkPermission.mockResolvedValue({
+      authorized: true,
       authContext: { user: { id: "real-user" } },
     });
     routeMocks.getSessionById.mockReturnValue({

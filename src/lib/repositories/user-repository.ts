@@ -69,6 +69,13 @@ export function updateUser(id: string, input: UpdateUserInput): User | null {
     if (input.status === "deleted") {
       sets.push("deleted_at = ?");
       values.push(new Date().toISOString());
+      // Anonymize PII on deletion (GDPR Art.17 — Right to Erasure)
+      sets.push("email = 'deleted_' || id || '@deleted.invalid'");
+      sets.push("name = ''");
+      sets.push("nickname = ''");
+      sets.push("personal_note = ''");
+      sets.push("google_id = NULL");
+      sets.push("avatar_url = ''");
     } else {
       sets.push("deleted_at = NULL");
     }

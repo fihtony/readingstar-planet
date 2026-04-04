@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkPermission } from "@/lib/permissions";
+import { checkPermission, getLocationFromRequest } from "@/lib/permissions";
 import { logUserActivity, getDisplayName } from "@/lib/auth";
 import { updateUser } from "@/lib/repositories/user-repository";
-import { getClientIp } from "@/lib/permissions";
 
 const MAX_NOTE_LENGTH = 5000;
 const HTTPS_URL_REGEX = /^https:\/\/.{1,2048}$/;
@@ -99,7 +98,7 @@ export async function PUT(request: NextRequest) {
     user.id,
     "profile_updated",
     JSON.stringify(Object.keys(updates)),
-    getClientIp(request)
+    getLocationFromRequest(request)
   );
 
   return NextResponse.json({

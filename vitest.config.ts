@@ -9,6 +9,10 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./__tests__/setup.ts"],
     include: ["__tests__/**/*.test.{ts,tsx}"],
+    env: {
+      // Required for CSRF token generation in tests.
+      READINGSTAR_CSRF_SECRET: "test-csrf-secret-for-vitest",
+    },
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "lcov"],

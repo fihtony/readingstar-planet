@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const { authContext } = await checkPermission(request, "public");
+  const { authorized, response, authContext } = await checkPermission(request, "public");
+  if (!authorized) return response!
 
   try {
     const body = await request.json();

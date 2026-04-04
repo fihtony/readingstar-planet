@@ -82,6 +82,7 @@ describe("Google OAuth callback integration", () => {
         headers: {
           "user-agent": "Mozilla/5.0 Chrome/136.0",
           "x-real-ip": "127.0.0.1",
+          "cookie": "rs_oauth_nonce=test-nonce-value",
         },
       }
     );
@@ -138,6 +139,7 @@ describe("Google OAuth callback integration", () => {
         headers: {
           "user-agent": "Mozilla/5.0 Safari/17.0",
           "x-real-ip": "127.0.0.1",
+          "cookie": "rs_oauth_nonce=test-nonce-value",
         },
       }
     );
@@ -183,6 +185,7 @@ describe("Google OAuth callback integration", () => {
         headers: {
           "user-agent": "Mozilla/5.0 Firefox/137.0",
           "x-real-ip": "127.0.0.1",
+          "cookie": "rs_oauth_nonce=test-nonce-value",
         },
       }
     );
@@ -239,6 +242,7 @@ describe("Google OAuth callback integration", () => {
         headers: {
           "user-agent": "Mozilla/5.0 Chrome/136.0",
           "x-real-ip": "127.0.0.1",
+          "cookie": "rs_oauth_nonce=test-nonce-value",
         },
       }
     );

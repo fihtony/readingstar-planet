@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { decrypt } from "./encryption";
+import { logger } from "./logger";
 
 /**
  * SMTP configuration loaded from the database (app_metadata), falling back to
@@ -74,11 +75,7 @@ export async function sendEmail({
   const { host, port, user, pass, from } = loadSmtpConfig();
 
   if (!host || !user || !pass) {
-    console.warn(
-      "[email] SMTP not configured. " +
-      "Configure SMTP via Admin → Settings or set SMTP_HOST / SMTP_USER / SMTP_PASS env vars. " +
-      "Email not sent to: " + (Array.isArray(to) ? to.join(", ") : to)
-    );
+    logger.warn("email", "SMTP not configured — email suppressed. Configure via Admin → Settings.");
     return false;
   }
 

@@ -73,6 +73,9 @@ export default function ReadPageClient({
   const [ttsVoice, setTtsVoice] = useState("");
   const [readCountCooldownMs, setReadCountCooldownMs] = useState<number | null>(null);
   const sessionBootstrapIdRef = useRef<string | null>(null);
+  // Tracks whether settings have been hydrated from the API; prevents writing
+  // the just-loaded values back to the server on initial render.
+  const settingsHydratedRef = useRef(false);
 
   const readingFocus = useReadingFocus({
     totalLines: document?.lines.length ?? 0,
@@ -272,6 +275,13 @@ export default function ReadPageClient({
 
   useEffect(() => {
     if (!settingsReady) {
+      return;
+    }
+
+    // Skip the first fire caused by hydrating settings from the API.
+    // Only save when the user actually changes a setting.
+    if (!settingsHydratedRef.current) {
+      settingsHydratedRef.current = true;
       return;
     }
 

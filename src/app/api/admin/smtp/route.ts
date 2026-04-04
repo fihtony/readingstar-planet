@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkPermission, getClientIp } from "@/lib/permissions";
+import { checkPermission, getLocationFromRequest } from "@/lib/permissions";
 import { logAdminAudit, logUserActivity } from "@/lib/auth";
 import { getDatabase } from "@/lib/db";
 import { encrypt, decrypt } from "@/lib/encryption";
@@ -96,7 +96,7 @@ export async function PUT(request: NextRequest) {
     admin.id,
     "admin_action",
     JSON.stringify({ action: "smtp_settings_changed" }),
-    getClientIp(request)
+    getLocationFromRequest(request)
   );
 
   return NextResponse.json(readSmtpSettings());

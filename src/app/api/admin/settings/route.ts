@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkPermission, getClientIp } from "@/lib/permissions";
+import { checkPermission, getLocationFromRequest } from "@/lib/permissions";
 import { logAdminAudit, logUserActivity } from "@/lib/auth";
 import { getDatabase } from "@/lib/db";
 import type { FontFamily, ReadingTheme, RegistrationPolicy } from "@/types";
@@ -226,7 +226,7 @@ export async function PUT(request: NextRequest) {
         admin.id,
         "admin_action",
         JSON.stringify({ action: "default_settings_changed", changes }),
-        getClientIp(request)
+        getLocationFromRequest(request)
       );
     }
   })();

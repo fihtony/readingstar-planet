@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkPermission, getClientIp } from "@/lib/permissions";
+import { checkPermission, getLocationFromRequest } from "@/lib/permissions";
 import {
   deleteAllUserSessions,
   clearSessionCookie,
@@ -36,7 +36,7 @@ export async function DELETE(request: NextRequest) {
     user.id,
     "account_deleted",
     "",
-    getClientIp(request)
+    getLocationFromRequest(request)
   );
 
   await clearSessionCookie();

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkPermission, getClientIp } from "@/lib/permissions";
+import { checkPermission, getLocationFromRequest } from "@/lib/permissions";
 import { getUserById, logAdminAudit, logUserActivity } from "@/lib/auth";
 import { updateUser } from "@/lib/repositories/user-repository";
 import { getDatabase } from "@/lib/db";
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       admin.id,
       "admin_action",
       JSON.stringify({ action: "user_restored", targetId }),
-      getClientIp(request)
+      getLocationFromRequest(request)
     );
   })();
 

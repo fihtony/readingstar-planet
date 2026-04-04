@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkPermission, getClientIp } from "@/lib/permissions";
+import { checkPermission, getLocationFromRequest } from "@/lib/permissions";
 import { logAdminAudit, logUserActivity } from "@/lib/auth";
 import { getDatabase } from "@/lib/db";
 import type { RegistrationPolicy } from "@/types";
@@ -65,7 +65,7 @@ export async function PATCH(request: NextRequest) {
       admin.id,
       "admin_action",
       JSON.stringify({ action: "registration_policy_changed", from: oldPolicy, to: policy }),
-      getClientIp(request)
+      getLocationFromRequest(request)
     );
   })();
 

@@ -3,6 +3,7 @@ import { validateFile, titleFromFilename } from "@/lib/pdf-parser";
 import { extractTextFromPDF } from "@/lib/pdf-parser.server";
 import { sanitizeTextContent } from "@/lib/text-processor";
 import { logger } from "@/lib/logger";
+import { checkPermission } from "@/lib/permissions";
 
 /**
  * POST /api/documents/preview
@@ -12,6 +13,9 @@ import { logger } from "@/lib/logger";
  * and allow editing before the user confirms the import.
  */
 export async function POST(request: NextRequest) {
+  const { authorized, response } = await checkPermission(request, "authenticated");
+  if (!authorized) return response!;
+
   try {
     const formData = await request.formData();
     const file = formData.get("file");

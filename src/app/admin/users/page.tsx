@@ -30,7 +30,7 @@ type ActivityData = {
     id: string;
     action: string;
     detail: string;
-    ip_address: string | null;
+    location: string | null;
     created_at: string;
   }[];
   auditLogs: {
@@ -932,8 +932,8 @@ function ActivityPanel({
                       <div className="shrink-0 text-right text-gray-400">
                         <div>{formatDate(log.created_at)}</div>
                         <div>{formatTime(log.created_at)}</div>
-                        {log.ip_address && (
-                          <div className="text-gray-300">{log.ip_address}</div>
+                        {log.location && (
+                          <div className="text-gray-300">{log.location}</div>
                         )}
                       </div>
                     </div>

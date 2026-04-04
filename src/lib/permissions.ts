@@ -74,7 +74,7 @@ export async function checkPermission(
   }
 
   if (level === "admin" && authContext.user.role !== "admin") {
-    // Log forbidden action attempt
+    // Log forbidden action attempt with location info (no raw IP stored)
     logUserActivity(
       authContext.user.id,
       "forbidden_action_attempt",
@@ -82,7 +82,7 @@ export async function checkPermission(
         method,
         path: request.nextUrl.pathname,
       }),
-      getClientIp(request)
+      getLocationFromRequest(request)
     );
     return {
       authorized: false,
@@ -106,6 +106,26 @@ export function getClientIp(request: NextRequest): string | null {
     request.headers.get("x-real-ip") ||
     null
   );
+}
+
+/**
+ * Extract approximate location (city, country) from CDN-injected geo headers.
+ * Supports Vercel and Cloudflare. Returns null when no geo headers are present.
+ * Raw IP addresses are intentionally NOT stored to comply with privacy regulations.
+ */
+export function getLocationFromRequest(request: NextRequest): string | null {
+  const city =
+    request.headers.get("x-vercel-ip-city") ??
+    request.headers.get("cf-ipcity");
+  const country =
+    request.headers.get("x-vercel-ip-country") ??
+    request.headers.get("cf-ipcountry");
+
+  const decodedCity = city ? decodeURIComponent(city) : null;
+
+  if (decodedCity && country) return `${decodedCity}, ${country}`;
+  if (country) return country;
+  return null;
 }
 
 /**

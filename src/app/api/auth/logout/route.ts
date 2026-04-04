@@ -4,7 +4,7 @@ import {
   clearSessionCookie,
   logUserActivity,
 } from "@/lib/auth";
-import { checkPermission, getClientIp } from "@/lib/permissions";
+import { checkPermission, getLocationFromRequest } from "@/lib/permissions";
 
 /** POST /api/auth/logout — log out current user */
 export async function POST(request: NextRequest) {
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (user) {
-    logUserActivity(user.id, "logout", "", getClientIp(request));
+    logUserActivity(user.id, "logout", "", getLocationFromRequest(request));
   }
 
   await clearSessionCookie();

@@ -23,7 +23,7 @@ export async function GET(
   // Recent activity log (last 30 entries)
   const activityLogs = db
     .prepare(
-      `SELECT id, action, detail, ip_address, created_at
+      `SELECT id, action, detail, location, created_at
        FROM user_activity_log
        WHERE user_id = ?
        ORDER BY created_at DESC
@@ -33,7 +33,7 @@ export async function GET(
     id: string;
     action: string;
     detail: string;
-    ip_address: string | null;
+    location: string | null;
     created_at: string;
   }[];
 

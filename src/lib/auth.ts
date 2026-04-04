@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID, createHmac } from "crypto";
+import { randomBytes, randomUUID, createHmac, createHash } from "crypto";
 import { cookies } from "next/headers";
 import { getDatabase } from "./db";
 import type { User, AuthSession, DeviceType } from "@/types";
@@ -162,7 +162,7 @@ export function createAuthSession(
     `INSERT INTO auth_sessions (id, user_id, ip_address, raw_user_agent, browser_name, browser_version, os_name, os_version, device_type, device_model, created_at, last_seen_at, expires_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
-    id, userId, ipAddress, userAgent,
+    id, userId, null, userAgent,
     parsed.browserName, parsed.browserVersion,
     parsed.osName, parsed.osVersion,
     parsed.deviceType, parsed.deviceModel,
@@ -329,7 +329,13 @@ export async function clearSessionCookie(): Promise<void> {
 const CSRF_HEADER_NAME = "x-csrf-token";
 
 function getCsrfSecret(): string {
-  return process.env.READINGSTAR_CSRF_SECRET ?? process.env.NEXTAUTH_SECRET ?? "readingstar-csrf-fallback";
+  const secret = process.env.READINGSTAR_CSRF_SECRET ?? process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    throw new Error(
+      "READINGSTAR_CSRF_SECRET (or NEXTAUTH_SECRET) environment variable must be set"
+    );
+  }
+  return secret;
 }
 
 /**
@@ -373,7 +379,9 @@ function pruneRateLimitLog(): void {
 
 /**
  * Record an attempt and return true when within limit, false when rate-limited.
- * `key` is typically an IP address; `maxAttempts` and `windowMs` are configurable.
+ * `key` is typically an IP address — it is SHA-256 hashed before storage so
+ * raw IP addresses are never persisted (privacy compliance).
+ * `maxAttempts` and `windowMs` are configurable.
  */
 export function checkRateLimit(
   key: string,
@@ -382,12 +390,14 @@ export function checkRateLimit(
 ): boolean {
   const db = getDatabase();
   pruneRateLimitLog();
+  // Hash the key (IP) so raw IP addresses are not stored in the DB.
+  const hashedKey = createHash("sha256").update(key).digest("hex");
   const windowSec = windowMs / 1000;
   const row = db.prepare(
     `SELECT COUNT(*) AS count FROM rate_limit_log WHERE key = ? AND attempt_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || ? || ' seconds')`
-  ).get(key, windowSec) as { count: number };
+  ).get(hashedKey, windowSec) as { count: number };
   if (row.count >= maxAttempts) return false;
-  db.prepare("INSERT INTO rate_limit_log (key) VALUES (?)").run(key);
+  db.prepare("INSERT INTO rate_limit_log (key) VALUES (?)").run(hashedKey);
   return true;
 }
 
@@ -402,13 +412,13 @@ export function logUserActivity(
   userId: string,
   action: string,
   detail: string = "",
-  ipAddress: string | null = null
+  location: string | null = null
 ): void {
   const db = getDatabase();
   db.prepare(
-    `INSERT INTO user_activity_log (id, user_id, action, detail, ip_address, created_at)
+    `INSERT INTO user_activity_log (id, user_id, action, detail, location, created_at)
      VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(randomUUID(), userId, action, detail, ipAddress, new Date().toISOString());
+  ).run(randomUUID(), userId, action, detail, location, new Date().toISOString());
 }
 
 export function logAdminAudit(

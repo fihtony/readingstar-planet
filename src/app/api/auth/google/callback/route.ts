@@ -10,7 +10,7 @@ import {
   checkLoginRateLimit,
 } from "@/lib/auth";
 import { createUser, updateUser } from "@/lib/repositories/user-repository";
-import { getClientIp } from "@/lib/permissions";
+import { getClientIp, getLocationFromRequest } from "@/lib/permissions";
 import { getAppUrl } from "@/lib/app-url";
 import { logger } from "@/lib/logger";
 
@@ -23,6 +23,7 @@ const client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_R
 /** GET /api/auth/google/callback — handle Google OAuth callback */
 export async function GET(request: NextRequest) {
   const ip = getClientIp(request);
+  const location = getLocationFromRequest(request);
   const userAgent = request.headers.get("user-agent") ?? "";
 
   // Rate limit
@@ -38,8 +39,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(getAppUrl(request, "/library"));
   }
 
-  // Read and clear the nonce cookie set during login initiation
-  const nonce = request.cookies.get("rs_oauth_nonce")?.value ?? undefined;
+  // Nonce is required to prevent ID token replay attacks.
+  // If the cookie is absent the flow must be restarted.
+  const nonce = request.cookies.get("rs_oauth_nonce")?.value;
+  if (!nonce) {
+    return NextResponse.redirect(getAppUrl(request, "/library?error=auth_failed"));
+  }
 
   try {
     // Exchange authorization code for tokens
@@ -47,6 +52,8 @@ export async function GET(request: NextRequest) {
     const ticket = await client.verifyIdToken({
       idToken: tokens.id_token!,
       audience: GOOGLE_CLIENT_ID,
+      // Nonce is guaranteed non-null here (validated above).
+      // Spread form used because the type definition does not include `nonce`.
       ...(nonce ? { nonce } : {}),
     });
 
@@ -133,15 +140,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Create session
-    const session = createAuthSession(user.id, ip, userAgent);
+    // Create session (no IP stored for privacy compliance)
+    const session = createAuthSession(user.id, null, userAgent);
     await setSessionCookie(session.id);
 
-    // Log login
+    // Log login (location from CDN geo headers; raw IP not recorded)
     logUserActivity(user.id, "login", JSON.stringify({
-      ip,
       userAgent: userAgent.substring(0, 200),
-    }), ip);
+    }), location);
 
     // Update last_login_at
     updateUser(user.id, { lastLoginAt: new Date().toISOString() });

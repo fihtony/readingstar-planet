@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkPermission, getClientIp } from "@/lib/permissions";
+import { checkPermission, getLocationFromRequest } from "@/lib/permissions";
 import {
   getUserById,
   deleteAllUserSessions,
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   }
 
   const db = getDatabase();
-  const ip = getClientIp(request);
+  const location = getLocationFromRequest(request);
 
   db.transaction(() => {
     deleteAllUserSessions(targetId);
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       admin.id,
       "admin_action",
       JSON.stringify({ action: "user_force_logout", targetId }),
-      ip
+      location
     );
   })();
 

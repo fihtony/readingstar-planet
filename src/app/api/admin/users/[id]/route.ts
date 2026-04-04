@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkPermission, getClientIp } from "@/lib/permissions";
+import { checkPermission, getLocationFromRequest } from "@/lib/permissions";
 import {
   logUserActivity,
   logAdminAudit,
@@ -147,7 +147,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       admin.id,
       "admin_action",
       JSON.stringify({ action, targetId, changes }),
-      getClientIp(request)
+      getLocationFromRequest(request)
     );
   })();
 
@@ -199,7 +199,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       admin.id,
       "admin_action",
       JSON.stringify({ action: "user_deleted", targetId }),
-      getClientIp(request)
+      getLocationFromRequest(request)
     );
   })();
 

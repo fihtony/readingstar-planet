@@ -6,7 +6,7 @@ import {
   setSessionCookie,
 } from "@/lib/auth";
 import { getAppUrl } from "@/lib/app-url";
-import { getClientIp } from "@/lib/permissions";
+import { checkPermission } from "@/lib/permissions";
 import { createUser, updateUser } from "@/lib/repositories/user-repository";
 import type { User, UserRole, UserStatus } from "@/types";
 
@@ -134,7 +134,7 @@ async function issueSession(request: NextRequest, input: SessionSeedInput) {
   const user = ensureUser(input);
   const session = createAuthSession(
     user.id,
-    getClientIp(request),
+    null,
     request.headers.get("user-agent") ?? "Playwright Test Browser"
   );
 
