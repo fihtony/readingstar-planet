@@ -184,10 +184,10 @@ const SAND_WRITING_HIGHLIGHT_STYLE: CSSProperties = {
 };
 
 const LETTER_BAY_HIGHLIGHT_STYLE: CSSProperties = {
-  left: "-4.7%",
-  top: "18.9%",
-  width: "44.85%",
-  height: "66.3%",
+  left: "0%",
+  top: "20.8%",
+  width: "38.7%",
+  height: "62.60%",
 };
 
 const SPOTLIGHT_ISLAND_HIGHLIGHT_STYLE: CSSProperties = {
@@ -200,15 +200,15 @@ const SPOTLIGHT_ISLAND_HIGHLIGHT_STYLE: CSSProperties = {
 const ECHO_VALLEY_HIGHLIGHT_STYLE: CSSProperties = {
   left: "12.3%",
   top: "57.2%",
-  width: "50.25%",
+  width: "50.2%",
   height: "57.9%",
 };
 
 const SHELF_BAY_HIGHLIGHT_STYLE: CSSProperties = {
-  left: "64.4%",
-  top: "42.7%",
-  width: "36.2%",
-  height: "53.8%",
+  left: "68.55%",
+  top: "43.55%",
+  width: "30.05%",
+  height: "52.25%",
 };
 
 const MENU_TEXT_COLORS = {
@@ -390,12 +390,12 @@ function IslandOverlay({
       : isFactory
         ? "/images/word_factory_lit.png"
         : isBay
-          ? "/images/letter_bay_lit.png"
+          ? "/images/letter_bay_lit4.png"
           : isIsland
             ? "/images/spotlight_island_lit5.png"
             : isValley
-              ? "/images/echo_valley_lit.png"
-              : "/images/shelf_bay_lit.png";
+              ? "/images/echo_valley_lit2.png"
+              : "/images/shelf_bay_lit2.png";
 
   const highlightImageStyle = isBlocks
     ? SOUND_BLOCK_HIGHLIGHT_STYLE
