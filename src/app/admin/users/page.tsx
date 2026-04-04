@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useCsrfFetch } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/Button";
+import { formatDate, formatDateTime, formatTime } from "@/lib/format-date";
 import type { User, UserRole, UserStatus } from "@/types";
 
 const MAX_NOTE_LENGTH = 5000;
@@ -394,10 +395,10 @@ export default function AdminUsersPage() {
                   {u.adminNotes || "—"}
                 </td>
                 <td className="px-3 py-3 text-gray-500 whitespace-nowrap">
-                  {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
+                  {formatDate(u.createdAt)}
                 </td>
                 <td className="px-3 py-3 text-gray-500 whitespace-nowrap">
-                  {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "Never"}
+                  {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : "Never"}
                 </td>
                 <td className="px-3 py-3 text-gray-500">
                   {u.recentDevice ? (
@@ -406,7 +407,7 @@ export default function AdminUsersPage() {
                         {u.recentDevice.label}
                       </div>
                       <div className="text-xs text-gray-400">
-                        {new Date(u.recentDevice.lastSeenAt).toLocaleString()}
+                        {formatDateTime(u.recentDevice.lastSeenAt)}
                       </div>
                     </div>
                   ) : (
@@ -807,7 +808,7 @@ function ActivityPanel({
                       label="Last Active"
                       value={
                         data.readingStats.lastReadAt
-                          ? new Date(data.readingStats.lastReadAt).toLocaleDateString()
+                          ? formatDate(data.readingStats.lastReadAt)
                           : "Never"
                       }
                     />
@@ -815,7 +816,7 @@ function ActivityPanel({
                   {data.readingStats.firstReadAt && (
                     <p className="text-xs text-gray-400">
                       First read:{" "}
-                      {new Date(data.readingStats.firstReadAt).toLocaleString()}
+                      {formatDateTime(data.readingStats.firstReadAt)}
                     </p>
                   )}
                   <div>
@@ -831,7 +832,7 @@ function ActivityPanel({
                             {log.detail || "—"}
                           </span>
                           <span className="shrink-0 text-gray-400">
-                            {new Date(log.created_at).toLocaleDateString()}
+                            {formatDate(log.created_at)}
                           </span>
                         </div>
                       ))}
@@ -855,8 +856,8 @@ function ActivityPanel({
                         {log.detail || "—"}
                       </span>
                       <div className="shrink-0 text-right text-gray-400">
-                        <div>{new Date(log.created_at).toLocaleDateString()}</div>
-                        <div>{new Date(log.created_at).toLocaleTimeString()}</div>
+                        <div>{formatDate(log.created_at)}</div>
+                        <div>{formatTime(log.created_at)}</div>
                         {log.ip_address && (
                           <div className="text-gray-300">{log.ip_address}</div>
                         )}
@@ -887,8 +888,8 @@ function ActivityPanel({
                         </div>
                       </div>
                       <div className="shrink-0 text-right text-gray-400">
-                        <div>{new Date(log.created_at).toLocaleDateString()}</div>
-                        <div>{new Date(log.created_at).toLocaleTimeString()}</div>
+                        <div>{formatDate(log.created_at)}</div>
+                        <div>{formatTime(log.created_at)}</div>
                       </div>
                     </div>
                   ))}

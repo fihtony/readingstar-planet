@@ -13,7 +13,7 @@ describe("admin user lifecycle integration", () => {
 
   beforeEach(() => {
     testDb = createTestDatabase();
-    cookieStore = createCookieStore({ rs_csrf: "csrf-token-1" });
+    cookieStore = createCookieStore();
   });
 
   afterEach(() => {
@@ -48,25 +48,26 @@ describe("admin user lifecycle integration", () => {
       "Mozilla/5.0 Chrome/136.0"
     );
     cookieStore.set("rs_session", session.id);
+    const csrfToken = await modules.auth.generateCsrfToken();
 
-    return { ...modules, admin };
+    return { ...modules, admin, csrfToken };
   }
 
-  function patchRequest(body: Record<string, unknown>) {
+  function patchRequest(body: Record<string, unknown>, csrfToken: string) {
     return new NextRequest("http://localhost:3000/api/admin/users/target", {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
-        "x-csrf-token": "csrf-token-1",
+        "x-csrf-token": csrfToken,
       },
       body: JSON.stringify(body),
     });
   }
 
   it("prevents an admin from demoting themselves", async () => {
-    const { adminUserRoute, admin } = await loadAuthedRoutes();
+    const { adminUserRoute, admin, csrfToken } = await loadAuthedRoutes();
 
-    const response = await adminUserRoute.PATCH(patchRequest({ role: "user" }), {
+    const response = await adminUserRoute.PATCH(patchRequest({ role: "user" }, csrfToken), {
       params: Promise.resolve({ id: admin.id }),
     });
     const body = await response.json();
@@ -76,12 +77,12 @@ describe("admin user lifecycle integration", () => {
   });
 
   it("prevents an admin from deleting themselves via the admin route", async () => {
-    const { adminUserRoute, admin } = await loadAuthedRoutes();
+    const { adminUserRoute, admin, csrfToken } = await loadAuthedRoutes();
 
     const response = await adminUserRoute.DELETE(
       new NextRequest("http://localhost:3000/api/admin/users/self", {
         method: "DELETE",
-        headers: { "x-csrf-token": "csrf-token-1" },
+        headers: { "x-csrf-token": csrfToken },
       }),
       {
         params: Promise.resolve({ id: admin.id }),
@@ -94,12 +95,12 @@ describe("admin user lifecycle integration", () => {
   });
 
   it("prevents an admin from self-deleting through the account endpoint", async () => {
-    const { selfDeleteRoute } = await loadAuthedRoutes();
+    const { selfDeleteRoute, csrfToken } = await loadAuthedRoutes();
 
     const response = await selfDeleteRoute.DELETE(
       new NextRequest("http://localhost:3000/api/auth/account", {
         method: "DELETE",
-        headers: { "x-csrf-token": "csrf-token-1" },
+        headers: { "x-csrf-token": csrfToken },
       })
     );
     const body = await response.json();
@@ -111,7 +112,7 @@ describe("admin user lifecycle integration", () => {
   });
 
   it("deactivates a target user and invalidates all of their sessions", async () => {
-    const { adminUserRoute, auth, userRepository } = await loadAuthedRoutes();
+    const { adminUserRoute, auth, userRepository, csrfToken } = await loadAuthedRoutes();
     const target = userRepository.createUser({
       email: "student@example.com",
       role: "user",
@@ -123,7 +124,7 @@ describe("admin user lifecycle integration", () => {
     auth.createAuthSession(target.id, "127.0.0.3", "Mozilla/5.0 Safari/17.0");
 
     const response = await adminUserRoute.PATCH(
-      patchRequest({ status: "inactive" }),
+      patchRequest({ status: "inactive" }, csrfToken),
       {
         params: Promise.resolve({ id: target.id }),
       }
@@ -141,7 +142,7 @@ describe("admin user lifecycle integration", () => {
   });
 
   it("restores a deleted user and clears deleted_at", async () => {
-    const { restoreRoute, userRepository } = await loadAuthedRoutes();
+    const { restoreRoute, userRepository, csrfToken } = await loadAuthedRoutes();
     const target = userRepository.createUser({
       email: "restore-me@example.com",
       role: "user",
@@ -152,7 +153,7 @@ describe("admin user lifecycle integration", () => {
     const response = await restoreRoute.POST(
       new NextRequest("http://localhost:3000/api/admin/users/restore", {
         method: "POST",
-        headers: { "x-csrf-token": "csrf-token-1" },
+        headers: { "x-csrf-token": csrfToken },
       }),
       {
         params: Promise.resolve({ id: target.id }),
@@ -169,7 +170,7 @@ describe("admin user lifecycle integration", () => {
   });
 
   it("forces logout for all sessions belonging to the target user", async () => {
-    const { forceLogoutRoute, auth, userRepository } = await loadAuthedRoutes();
+    const { forceLogoutRoute, auth, userRepository, csrfToken } = await loadAuthedRoutes();
     const target = userRepository.createUser({
       email: "logout-me@example.com",
       role: "user",
@@ -183,7 +184,7 @@ describe("admin user lifecycle integration", () => {
     const response = await forceLogoutRoute.POST(
       new NextRequest("http://localhost:3000/api/admin/users/force-logout", {
         method: "POST",
-        headers: { "x-csrf-token": "csrf-token-1" },
+        headers: { "x-csrf-token": csrfToken },
       }),
       {
         params: Promise.resolve({ id: target.id }),

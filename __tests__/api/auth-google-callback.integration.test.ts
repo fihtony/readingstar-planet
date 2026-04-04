@@ -60,8 +60,8 @@ describe("Google OAuth callback integration", () => {
     testDb
       .prepare(
         `INSERT INTO app_metadata (key, value, updated_at)
-         VALUES ('registration_policy', 'open', datetime('now'))
-         ON CONFLICT(key) DO UPDATE SET value = 'open', updated_at = datetime('now')`
+         VALUES ('registration_policy', 'open', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+         ON CONFLICT(key) DO UPDATE SET value = 'open', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
       )
       .run();
 
@@ -113,7 +113,6 @@ describe("Google OAuth callback integration", () => {
     });
     expect(sessionCount).toBe(1);
     expect(cookieStore.get("rs_session")?.value).toBeTruthy();
-    expect(cookieStore.get("rs_csrf")?.value).toBeTruthy();
   });
 
   it("activates a pending invited user during invite-only login", async () => {
@@ -218,8 +217,8 @@ describe("Google OAuth callback integration", () => {
     testDb
       .prepare(
         `INSERT INTO app_metadata (key, value, updated_at)
-         VALUES ('registration_policy', 'open', datetime('now'))
-         ON CONFLICT(key) DO UPDATE SET value = 'open', updated_at = datetime('now')`
+         VALUES ('registration_policy', 'open', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+         ON CONFLICT(key) DO UPDATE SET value = 'open', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`
       )
       .run();
 

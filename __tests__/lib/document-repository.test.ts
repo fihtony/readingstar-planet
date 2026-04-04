@@ -32,7 +32,7 @@ describe("document-repository", () => {
     // Seed a default user for FK constraint
     testDb
       .prepare(
-        `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`
+        `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`
       )
       .run("user-1", "test@example.com", "Test Kid", "user");
   });

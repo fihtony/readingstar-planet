@@ -67,7 +67,8 @@ export function updateUser(id: string, input: UpdateUserInput): User | null {
     sets.push("status = ?");
     values.push(input.status);
     if (input.status === "deleted") {
-      sets.push("deleted_at = datetime('now')");
+      sets.push("deleted_at = ?");
+      values.push(new Date().toISOString());
     } else {
       sets.push("deleted_at = NULL");
     }
@@ -107,7 +108,8 @@ export function updateUser(id: string, input: UpdateUserInput): User | null {
 
   if (sets.length === 0) return getUserByIdDirect(id);
 
-  sets.push("updated_at = datetime('now')");
+  sets.push("updated_at = ?");
+  values.push(new Date().toISOString());
   values.push(id);
 
   db.prepare(`UPDATE users SET ${sets.join(", ")} WHERE id = ?`).run(...values);

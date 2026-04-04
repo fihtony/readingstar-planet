@@ -64,6 +64,7 @@ export default function LibraryPage() {
   // Delete group confirmation
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [deletingGroupName, setDeletingGroupName] = useState("");
+  const [deleteGroupError, setDeleteGroupError] = useState<string | null>(null);
 
   // Invite-only dialog
   const [showInviteOnlyDialog, setShowInviteOnlyDialog] = useState(false);
@@ -226,21 +227,26 @@ export default function LibraryPage() {
   const confirmDeleteGroup = (group: DocumentGroup) => {
     setDeletingGroupId(group.id);
     setDeletingGroupName(group.name);
+    setDeleteGroupError(null);
   };
 
   const handleDeleteGroup = async () => {
     if (!deletingGroupId) return;
     const id = deletingGroupId;
-    setDeletingGroupId(null);
+    setDeleteGroupError(null);
     try {
       const res = await csrfFetch(`/api/document-groups?id=${id}`, {
         method: "DELETE",
       });
       if (res.ok) {
+        setDeletingGroupId(null);
         await fetchDocuments();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setDeleteGroupError(data.error ?? "Failed to delete group.");
       }
     } catch {
-      // Handle error silently
+      setDeleteGroupError("Network error. Please try again.");
     }
   };
 
@@ -732,7 +738,7 @@ export default function LibraryPage() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-          onClick={() => setDeletingGroupId(null)}
+          onClick={() => { setDeletingGroupId(null); setDeleteGroupError(null); }}
         >
           <div
             className="w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl flex flex-col gap-4"
@@ -742,12 +748,17 @@ export default function LibraryPage() {
               <div className="text-4xl mb-3">🗂️</div>
               <h2 className="text-lg font-black text-slate-800 mb-1">Delete Group?</h2>
               <p className="text-sm text-gray-500 line-clamp-2">&ldquo;{deletingGroupName}&rdquo;</p>
-              <p className="text-xs text-gray-400 mt-2">Books in this group will be unassigned but not deleted.</p>
+              <p className="text-xs text-gray-400 mt-2">Only empty groups can be deleted.</p>
             </div>
+            {deleteGroupError && (
+              <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 text-center">
+                ⚠️ {deleteGroupError}
+              </div>
+            )}
             <div className="flex gap-3">
               <button
                 className="flex-1 px-4 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium hover:bg-gray-200"
-                onClick={() => setDeletingGroupId(null)}
+                onClick={() => { setDeletingGroupId(null); setDeleteGroupError(null); }}
               >
                 {t("cancelButton")}
               </button>

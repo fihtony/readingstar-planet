@@ -189,7 +189,7 @@ export function createAuthSession(
 export function getAuthSession(sessionId: string): AuthSession | null {
   const db = getDatabase();
   const row = db.prepare(
-    "SELECT * FROM auth_sessions WHERE id = ? AND expires_at > datetime('now')"
+    "SELECT * FROM auth_sessions WHERE id = ? AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
   ).get(sessionId) as Record<string, unknown> | undefined;
   if (!row) return null;
   return {
@@ -212,9 +212,10 @@ export function getAuthSession(sessionId: string): AuthSession | null {
 export function renewSession(sessionId: string): void {
   const db = getDatabase();
   const newExpiry = new Date(Date.now() + SESSION_DURATION_MS).toISOString();
+  const now = new Date().toISOString();
   db.prepare(
-    "UPDATE auth_sessions SET last_seen_at = datetime('now'), expires_at = ? WHERE id = ?"
-  ).run(newExpiry, sessionId);
+    "UPDATE auth_sessions SET last_seen_at = ?, expires_at = ? WHERE id = ?"
+  ).run(now, newExpiry, sessionId);
 }
 
 export function deleteSession(sessionId: string): void {
@@ -339,7 +340,7 @@ function pruneRateLimitLog(): void {
   if (now - lastPruneAt < RATE_LIMIT_PRUNE_INTERVAL) return;
   lastPruneAt = now;
   getDatabase()
-    .prepare("DELETE FROM rate_limit_log WHERE attempt_at < datetime('now', '-1 hour')")
+    .prepare("DELETE FROM rate_limit_log WHERE attempt_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour')")
     .run();
 }
 
@@ -356,7 +357,7 @@ export function checkRateLimit(
   pruneRateLimitLog();
   const windowSec = windowMs / 1000;
   const row = db.prepare(
-    `SELECT COUNT(*) AS count FROM rate_limit_log WHERE key = ? AND attempt_at > datetime('now', '-' || ? || ' seconds')`
+    `SELECT COUNT(*) AS count FROM rate_limit_log WHERE key = ? AND attempt_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-' || ? || ' seconds')`
   ).get(key, windowSec) as { count: number };
   if (row.count >= maxAttempts) return false;
   db.prepare("INSERT INTO rate_limit_log (key) VALUES (?)").run(key);
@@ -379,8 +380,8 @@ export function logUserActivity(
   const db = getDatabase();
   db.prepare(
     `INSERT INTO user_activity_log (id, user_id, action, detail, ip_address, created_at)
-     VALUES (?, ?, ?, ?, ?, datetime('now'))`
-  ).run(randomUUID(), userId, action, detail, ipAddress);
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(randomUUID(), userId, action, detail, ipAddress, new Date().toISOString());
 }
 
 export function logAdminAudit(
@@ -393,8 +394,8 @@ export function logAdminAudit(
   const db = getDatabase();
   db.prepare(
     `INSERT INTO admin_audit_log (id, admin_user_id, action, target_type, target_id, detail, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
-  ).run(randomUUID(), adminUserId, action, targetType, targetId, detail);
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(randomUUID(), adminUserId, action, targetType, targetId, detail, new Date().toISOString());
 }
 
 // ─── User display name helper ────────────────────────────────────────────────

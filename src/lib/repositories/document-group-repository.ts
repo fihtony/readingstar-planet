@@ -149,10 +149,13 @@ export function renameDocumentGroup(
   return getDocumentGroupById(id);
 }
 
-export function deleteDocumentGroup(id: string): boolean {
+export function deleteDocumentGroup(id: string): { success: boolean; bookCount?: number } {
   const db = getDatabase();
-  // Move documents in this group to have no group (null)
-  db.prepare("UPDATE documents SET group_id = NULL WHERE group_id = ?").run(id);
+  // Refuse deletion if the group still has books
+  const row = db.prepare("SELECT COUNT(*) AS count FROM documents WHERE group_id = ?").get(id) as { count: number };
+  if (row.count > 0) {
+    return { success: false, bookCount: row.count };
+  }
   const result = db.prepare("DELETE FROM document_groups WHERE id = ?").run(id);
-  return result.changes > 0;
+  return { success: result.changes > 0 };
 }

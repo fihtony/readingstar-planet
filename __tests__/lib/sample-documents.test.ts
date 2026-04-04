@@ -17,7 +17,7 @@ describe("sample-documents", () => {
 
     // Seed user for FK constraint (sample docs use 'default-user')
     db.prepare(
-      `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`
+      `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`
     ).run("default-user", "default@example.com", "Default", "user");
   });
 

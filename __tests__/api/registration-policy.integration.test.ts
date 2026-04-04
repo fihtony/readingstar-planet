@@ -50,9 +50,9 @@ describe("registration policy route integration", () => {
     }
 
     cookieStore.set("rs_session", session.id);
-    cookieStore.set("rs_csrf", "csrf-token-1");
+    const csrfToken = await modules.auth.generateCsrfToken();
 
-    return { ...modules, admin, session };
+    return { ...modules, admin, session, csrfToken };
   }
 
   it("returns the current registration policy for an authenticated admin and renews the session", async () => {
@@ -84,14 +84,14 @@ describe("registration policy route integration", () => {
   });
 
   it("updates the registration policy and writes audit logs", async () => {
-    const { route, admin } = await loadAuthedRoute("valid");
+    const { route, admin, csrfToken } = await loadAuthedRoute("valid");
 
     const response = await route.PATCH(
       new NextRequest("http://localhost:3000/api/admin/registration-policy", {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
-          "x-csrf-token": "csrf-token-1",
+          "x-csrf-token": csrfToken,
         },
         body: JSON.stringify({ policy: "open" }),
       })

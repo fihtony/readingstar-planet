@@ -31,7 +31,7 @@ describe("document-group-repository", () => {
 
     testDb
       .prepare(
-        `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`
+        `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`
       )
       .run("user-1", "test@example.com", "Test Kid", "user");
   });
@@ -138,7 +138,7 @@ describe("document-group-repository", () => {
   it("does not leak groups between different users", () => {
     testDb
       .prepare(
-        `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', datetime('now'), datetime('now'))`
+        `INSERT INTO users (id, email, nickname, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`
       )
       .run("user-2", "test2@example.com", "Other Kid", "user");
 
@@ -270,23 +270,17 @@ describe("document-group-repository", () => {
 
   // ── deleteDocumentGroup ───────────────────────────────────────────────────
 
-  it("deletes an existing group and returns true", () => {
+  it("deletes an empty group and returns success: true", () => {
     const group = createDocumentGroup({ userId: "user-1", name: "Deletable" });
     const result = deleteDocumentGroup(group.id);
-    expect(result).toBe(true);
+    expect(result.success).toBe(true);
+    expect(result.bookCount).toBeUndefined();
     expect(getDocumentGroupById(group.id)).toBeNull();
   });
 
-  it("returns false when deleting a non-existent group", () => {
-    const result = deleteDocumentGroup("non-existent-id");
-    expect(result).toBe(false);
-  });
-
-  it("unassigns documents (sets group_id to null) when their group is deleted", () => {
-    const group = createDocumentGroup({ userId: "user-1", name: "Science" });
-
-    // Force-assign a document to this group directly
-    const doc = createDocument({
+  it("returns success: false with bookCount when group has books", () => {
+    const group = createDocumentGroup({ userId: "user-1", name: "NonEmpty" });
+    createDocument({
       title: "Physics",
       content: "E=mc2",
       originalFilename: "physics.txt",
@@ -294,24 +288,51 @@ describe("document-group-repository", () => {
       fileSize: 10,
       uploadedBy: "user-1",
     });
-    testDb.prepare("UPDATE documents SET group_id = ? WHERE id = ?").run(group.id, doc.id);
+    // The createDocument auto-assigns to the first group for user-1
+    // Verify the group is not empty
+    const countRow = testDb.prepare("SELECT COUNT(*) AS count FROM documents WHERE group_id = ?").get(group.id) as { count: number };
+    if (countRow.count === 0) {
+      // Manually assign the doc to make the group non-empty
+      const docId = (testDb.prepare("SELECT id FROM documents LIMIT 1").get() as { id: string }).id;
+      testDb.prepare("UPDATE documents SET group_id = ? WHERE id = ?").run(group.id, docId);
+    }
+    const result = deleteDocumentGroup(group.id);
+    expect(result.success).toBe(false);
+    expect(result.bookCount).toBeGreaterThan(0);
+    // Group must still exist
+    expect(getDocumentGroupById(group.id)).not.toBeNull();
+  });
 
-    // Verify assignment
-    const before = testDb.prepare("SELECT group_id FROM documents WHERE id = ?").get(doc.id) as { group_id: string | null };
-    expect(before.group_id).toBe(group.id);
+  it("returns success: false when deleting a non-existent group", () => {
+    const result = deleteDocumentGroup("non-existent-id");
+    expect(result.success).toBe(false);
+  });
+
+  it("does not modify documents when deletion is blocked by book count", () => {
+    const group = createDocumentGroup({ userId: "user-1", name: "Protected" });
+    const doc = createDocument({
+      title: "Guardian",
+      content: "content",
+      originalFilename: "g.txt",
+      fileType: "txt",
+      fileSize: 5,
+      uploadedBy: "user-1",
+    });
+    testDb.prepare("UPDATE documents SET group_id = ? WHERE id = ?").run(group.id, doc.id);
 
     deleteDocumentGroup(group.id);
 
-    // After deletion the document's group_id must be NULL
+    // Book's group_id must remain pointing to the group (not nullified)
     const after = testDb.prepare("SELECT group_id FROM documents WHERE id = ?").get(doc.id) as { group_id: string | null };
-    expect(after.group_id).toBeNull();
+    expect(after.group_id).toBe(group.id);
   });
 
   it("only affects the target group when multiple groups exist", () => {
     const keep = createDocumentGroup({ userId: "user-1", name: "Keep" });
     const remove = createDocumentGroup({ userId: "user-1", name: "Remove" });
 
-    deleteDocumentGroup(remove.id);
+    const result = deleteDocumentGroup(remove.id);
+    expect(result.success).toBe(true);
 
     expect(getDocumentGroupById(keep.id)).not.toBeNull();
     expect(getDocumentGroupById(remove.id)).toBeNull();
@@ -319,11 +340,12 @@ describe("document-group-repository", () => {
     expect(listDocumentGroups("user-1")[0].id).toBe(keep.id);
   });
 
-  it("admin can delete a group (API route permission check)", async () => {
+  it("admin can delete an empty group (API route permission check)", () => {
     // Confirm the repository layer has no role restriction — access control
     // is enforced at the API layer (checkPermission + admin role).
     const group = createDocumentGroup({ userId: "user-1", name: "Admin Removable" });
-    expect(deleteDocumentGroup(group.id)).toBe(true);
+    const result = deleteDocumentGroup(group.id);
+    expect(result.success).toBe(true);
     expect(getDocumentGroupById(group.id)).toBeNull();
   });
 });

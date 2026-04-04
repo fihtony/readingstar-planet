@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { DocumentUpload } from "@/components/upload/DocumentUpload";
 
 describe("DocumentUpload", () => {
@@ -28,17 +29,18 @@ describe("DocumentUpload", () => {
     expect(input.accept).toContain(".txt");
   });
 
-  it("shows parsing state when a file is selected", () => {
+  it("opens the preview step when a file is selected", async () => {
     const { container } = render(<DocumentUpload {...defaultProps} />);
+    const user = userEvent.setup();
 
     const input = container.querySelector(
       'input[type="file"]'
     ) as HTMLInputElement;
     const file = new File(["content"], "test.txt", { type: "text/plain" });
 
-    fireEvent.change(input, { target: { files: [file] } });
-    // Component enters parsing state for TXT files
-    expect(screen.getByText(/extracting|parsing|preparing/i)).toBeInTheDocument();
+    await user.upload(input, file);
+    expect(await screen.findByText(/preview.*edit/i)).toBeInTheDocument();
+    expect(screen.getByDisplayValue("test")).toBeInTheDocument();
   });
 
   it("shows loading state during upload", () => {

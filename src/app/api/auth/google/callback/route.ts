@@ -8,7 +8,6 @@ import {
   setSessionCookie,
   logUserActivity,
   checkLoginRateLimit,
-  generateCsrfToken,
 } from "@/lib/auth";
 import { createUser, updateUser } from "@/lib/repositories/user-repository";
 import { getClientIp } from "@/lib/permissions";
@@ -137,7 +136,6 @@ export async function GET(request: NextRequest) {
     // Create session
     const session = createAuthSession(user.id, ip, userAgent);
     await setSessionCookie(session.id);
-    await generateCsrfToken();
 
     // Log login
     logUserActivity(user.id, "login", JSON.stringify({

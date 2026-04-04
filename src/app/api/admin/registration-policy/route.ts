@@ -50,7 +50,7 @@ export async function PATCH(request: NextRequest) {
   db.transaction(() => {
     db.prepare(
       `INSERT INTO app_metadata (key, value, updated_at)
-       VALUES ('registration_policy', ?, datetime('now'))
+       VALUES ('registration_policy', ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
     ).run(policy);
 

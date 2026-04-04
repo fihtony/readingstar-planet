@@ -6,7 +6,7 @@ export function initializeSchema(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS app_metadata (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
-      updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
+      updated_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
     CREATE TABLE IF NOT EXISTS users (
@@ -25,8 +25,8 @@ export function initializeSchema(db: Database.Database): void {
         CHECK (status IN ('active', 'inactive', 'deleted', 'pending_verification')),
       admin_notes TEXT NOT NULL DEFAULT '',
       last_login_at DATETIME,
-      created_at DATETIME NOT NULL DEFAULT (datetime('now')),
-      updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       deleted_at DATETIME
     );
 
@@ -42,8 +42,8 @@ export function initializeSchema(db: Database.Database): void {
       device_type TEXT NOT NULL DEFAULT 'unknown'
         CHECK (device_type IN ('desktop', 'tablet', 'mobile', 'bot', 'unknown')),
       device_model TEXT NOT NULL DEFAULT '',
-      created_at DATETIME NOT NULL DEFAULT (datetime('now')),
-      last_seen_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      last_seen_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       expires_at DATETIME NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -57,7 +57,7 @@ export function initializeSchema(db: Database.Database): void {
       action TEXT NOT NULL,
       detail TEXT NOT NULL DEFAULT '',
       ip_address TEXT,
-      created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
@@ -72,7 +72,7 @@ export function initializeSchema(db: Database.Database): void {
       target_type TEXT NOT NULL,
       target_id TEXT,
       detail TEXT NOT NULL DEFAULT '',
-      created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
@@ -88,8 +88,8 @@ export function initializeSchema(db: Database.Database): void {
       timed_session_count INTEGER NOT NULL DEFAULT 0,
       first_read_at DATETIME,
       last_read_at DATETIME,
-      created_at DATETIME NOT NULL DEFAULT (datetime('now')),
-      updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
       UNIQUE(user_id, document_id)
@@ -102,8 +102,8 @@ export function initializeSchema(db: Database.Database): void {
       user_id TEXT NOT NULL,
       name TEXT NOT NULL,
       position INTEGER NOT NULL DEFAULT 0,
-      created_at DATETIME NOT NULL DEFAULT (datetime('now')),
-      updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
@@ -119,8 +119,8 @@ export function initializeSchema(db: Database.Database): void {
       group_id TEXT,
       group_position INTEGER NOT NULL DEFAULT 0,
       icon TEXT,
-      created_at DATETIME NOT NULL DEFAULT (datetime('now')),
-      updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+      updated_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       FOREIGN KEY (group_id) REFERENCES document_groups(id) ON DELETE SET NULL,
       FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -129,7 +129,7 @@ export function initializeSchema(db: Database.Database): void {
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
       document_id TEXT NOT NULL,
-      started_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      started_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       ended_at DATETIME,
       focus_mode TEXT NOT NULL DEFAULT 'single-line' CHECK (focus_mode IN ('single-line', 'sliding-window', 'karaoke')),
       letter_helper_enabled INTEGER NOT NULL DEFAULT 0,
@@ -145,7 +145,7 @@ export function initializeSchema(db: Database.Database): void {
       document_id TEXT NOT NULL,
       current_line INTEGER NOT NULL DEFAULT 0,
       total_lines INTEGER NOT NULL DEFAULT 0,
-      updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      updated_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
       UNIQUE(user_id, document_id)
@@ -156,7 +156,7 @@ export function initializeSchema(db: Database.Database): void {
       user_id TEXT NOT NULL,
       type TEXT NOT NULL CHECK (type IN ('streak', 'effort', 'milestone')),
       name TEXT NOT NULL,
-      earned_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      earned_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       metadata TEXT NOT NULL DEFAULT '{}',
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
@@ -173,7 +173,7 @@ export function initializeSchema(db: Database.Database): void {
       daily_time_limit INTEGER NOT NULL DEFAULT 30 CHECK (daily_time_limit BETWEEN 5 AND 120),
       theme TEXT NOT NULL DEFAULT 'flashlight' CHECK (theme IN ('flashlight', 'magnifier', 'magic-wand')),
       locale TEXT NOT NULL DEFAULT 'en' CHECK (locale IN ('en', 'zh')),
-      updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      updated_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
@@ -188,7 +188,7 @@ export function initializeSchema(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS rate_limit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       key TEXT NOT NULL,
-      attempt_at DATETIME NOT NULL DEFAULT (datetime('now'))
+      attempt_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     );
 
     CREATE INDEX IF NOT EXISTS idx_rate_limit_log_key_time ON rate_limit_log(key, attempt_at);
@@ -313,8 +313,8 @@ function migrateUsersTable(db: Database.Database): void {
           CHECK (status IN ('active', 'inactive', 'deleted', 'pending_verification')),
         admin_notes TEXT NOT NULL DEFAULT '',
         last_login_at DATETIME,
-        created_at DATETIME NOT NULL DEFAULT (datetime('now')),
-        updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+        created_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
         deleted_at DATETIME
       );
     `);
@@ -377,7 +377,7 @@ function seedDefaultAppMetadata(db: Database.Database): void {
   };
 
   const insert = db.prepare(
-    `INSERT OR IGNORE INTO app_metadata (key, value, updated_at) VALUES (?, ?, datetime('now'))`
+    `INSERT OR IGNORE INTO app_metadata (key, value, updated_at) VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`
   );
 
   for (const [key, value] of Object.entries(defaults)) {
@@ -419,7 +419,7 @@ function seedInitialAdmin(db: Database.Database): void {
   const id = randomUUID();
   db.prepare(
     `INSERT INTO users (id, email, name, nickname, role, status, created_at, updated_at)
-     VALUES (?, ?, '', '', 'admin', 'pending_verification', datetime('now'), datetime('now'))`
+     VALUES (?, ?, '', '', 'admin', 'pending_verification', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`
   ).run(id, initialEmail);
 }
 

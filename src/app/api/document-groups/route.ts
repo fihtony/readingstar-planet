@@ -128,8 +128,14 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  const success = deleteDocumentGroup(id);
-  if (!success) {
+  const result = deleteDocumentGroup(id);
+  if (!result.success) {
+    if (result.bookCount !== undefined && result.bookCount > 0) {
+      return NextResponse.json(
+        { error: `Cannot delete group: it still contains ${result.bookCount} book(s). Move or delete all books first.` },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       { error: "Group not found" },
       { status: 404 }

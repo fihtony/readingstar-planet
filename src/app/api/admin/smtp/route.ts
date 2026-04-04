@@ -73,7 +73,7 @@ export async function PUT(request: NextRequest) {
 
   const upsert = db.prepare(
     `INSERT INTO app_metadata (key, value, updated_at)
-     VALUES (?, ?, datetime('now'))
+     VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
   );
 
