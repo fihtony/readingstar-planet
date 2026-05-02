@@ -1,6 +1,8 @@
 # ReadingStar Planet
 
-ReadingStar Planet is a Next.js reading support app designed for children who benefit from structured, low-friction reading assistance. It combines reading focus tools, text-to-speech support, document management, and role-based administration in a single web app.
+[ReadingStar Planet](https://reading.tarch.ca) is a Next.js reading support app designed for children who benefit from structured, low-friction reading assistance. It combines reading focus tools, text-to-speech support, document management, and role-based administration in a single web app.  
+
+*Website: [ReadingStar Planet](https://reading.tarch.ca)*
 
 ## Features
 
